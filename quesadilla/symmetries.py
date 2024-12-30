@@ -1,8 +1,8 @@
 import numpy as np
 from numpy.typing import ArrayLike
 from pymatgen.core.structure import Structure
-from pymatgen.util.coord import pbc_diff
 
+# from pymatgen.util.coord import pbc_diff
 import quesadilla.espresso_symm as espresso_symm
 
 
@@ -165,27 +165,27 @@ class Symmetrizer:
         #        lgamma,
         #    )
         #    print("IROTMQ from QE:", self.irotmq)
-        self.irotmq = 0
-        if self.minus_q:
-            # Get the first symmetry:
-            for k in range(self.nsym):
-                # Position feels the symmetries with S (fortran S is transposed)
-                # While q vector feels the symmetries with S^t (so no .T required for fortran matrix)
-                new_q = self.s[:, :, k].dot(q)
-                # Compare new_q with aq
-                new_q = pbc_diff(new_q, [0, 0, 0])
-                if np.allclose(q, -new_q, atol=1e-3, rtol=0):
-                    # print("Found a symmetry that maps q to -q")
-                    # print("Symmetry:", self.s[:,:, k])
-                    # print("q:", np.round(q, 5))
-                    # print("new_q:", np.round(new_q, 5))
-                    self.irotmq = k + 1
-                    # print("IROTMQ from python:", self.irotmq)
-                    break
-            if self.irotmq == 0:
-                # print ("Error, the fortran code tells me there is S so that Sq = -q + G")
-                # print ("But I did not find such a symmetry!")
-                raise ValueError("Error in the symmetrization. See stdout")
+        # self.irotmq = 0
+        # if self.minus_q:
+        #   # Get the first symmetry:
+        #   for k in range(self.nsym):
+        #       # Position feels the symmetries with S (fortran S is transposed)
+        #       # While q vector feels the symmetries with S^t (so no .T required for fortran matrix)
+        #       new_q = self.s[:,:, k].dot(q)
+        #       # Compare new_q with aq
+        #       new_q = pbc_diff(new_q, [0, 0, 0])
+        #       if  np.allclose(q, -new_q, atol=1e-3, rtol=0):
+        #           #print("Found a symmetry that maps q to -q")
+        #           #print("Symmetry:", self.s[:,:, k])
+        #           #print("q:", np.round(q, 5))
+        #           #print("new_q:", np.round(new_q, 5))
+        #           self.irotmq = k + 1
+        #           #print("IROTMQ from python:", self.irotmq)
+        #           break
+        #   if self.irotmq == 0:
+        #       #print ("Error, the fortran code tells me there is S so that Sq = -q + G")
+        #       #print ("But I did not find such a symmetry!")
+        #       raise ValueError("Error in the symmetrization. See stdout")
 
     def setup_sg_symmetries(self, verbose=False):
         self.setup_little_cogroup([0, 0, 0], verbose=verbose)
@@ -232,32 +232,38 @@ class Symmetrizer:
             self.nsymq,  # Number of symmetries in the small group of q
             full_symmetries,  # Array of ALL symmetries of the crystal
             full_invs,  # Index of inverse of s in self.s
-            False,  # Verbosity flag
+            verbose,  # Verbosity flag
         )
 
-        print("----------Inside routine get_star_q")
-        print("I am getting nq_new:", nq_new)
-        print("I am getting sxq:", sxq.T[:nq_new])
-        print("I am getting isq:", isq)
-        print("I am getting imq:", imq)
+        # print("----------Inside routine get_star_q")
+        # print("I am getting nq_new:", nq_new)
+        # print("I am getting sxq:", sxq.T[:nq_new])
+        # print("I am getting isq:", isq)
+        # print("I am getting imq:", imq)
         # do while (isq (isym) /= imq)
         #    isym = isym + 1
         # enddo
-        irotmq = np.where(isq == imq)[0][0]
-        print("I am getting irotmq:", irotmq)
-        # if imq > 0 and not np.allclose(sxq[:, irotmq], -q, atol=1e-3, rtol=0):
-        #    print("WARNING: sxq[imq] is not the inverse of -q")
-        print(f"sxq[{irotmq}]:", sxq[:, irotmq])
-        print("-q:", -q)
-        print("----------End of Inside routine get_star_q")
+        # irotmq = np.where(isq == imq)[0][0]
+        # print("I am getting irotmq:", irotmq)
+        ##if imq > 0 and not np.allclose(sxq[:, irotmq], -q, atol=1e-3, rtol=0):
+        ##    print("WARNING: sxq[imq] is not the inverse of -q")
+        # print(f"sxq[{irotmq}]:", sxq[:, irotmq])
+        # print("-q:", -q)
+        # print("----------End of Inside routine get_star_q")
+
+        # TODO: this implementation is quite confusing
+        # TODO: it is only really necessary because the imq thing doesn't
+        # TODO: work properly for nonsymmorphic space groups
         if imq != 0:
             total_star = np.zeros((nq_new, 3), dtype=np.float64)
         else:
+            # If -q is not in the star we stick it in there
             total_star = np.zeros((2 * nq_new, 3), dtype=np.float64)
 
-        total_star[:nq_new, :] = sxq[:, :nq_new].transpose()
+        total_star[:nq_new, :] = sxq[:, :nq_new].T
 
         if imq == 0:
+            # Stick -q into the star
             total_star[nq_new:, :] = -sxq[:, :nq_new].transpose()
 
         return total_star
@@ -280,7 +286,7 @@ class Symmetrizer:
         # Setup all the symmetries
         q = np.array(q, dtype=np.float64, order="F")
         q_star = self.get_star_q(q, verbose=False)
-        nq = np.shape(q_star)[0]
+        nq_total = np.shape(q_star)[0]
         # print("Got total star:", q_star)
 
         # q = np.array(q, dtype=np.float64, order="F")
@@ -292,7 +298,7 @@ class Symmetrizer:
         #    order="F",
         # )
         # self.setup_little_cogroup(q, verbose=True)
-        nq_new, sxq, isq, imq = espresso_symm.star_q(
+        nq_no_mq, sxq, isq, imq = espresso_symm.star_q(
             q_star[0],
             self.at,
             self.bg,
@@ -303,13 +309,13 @@ class Symmetrizer:
         )
         # print("I am getting nq_new vs nq:", nq_new, nq)
         # print("I am getting isq:", isq)
-        print("I am getting imq:", imq)
+        # print("I am getting imq:", imq)
         # print("I am getting sxq:", sxq.T)
         # assert nq_new == nq
 
         fcq = np.array(fcq, dtype=np.complex128, order="F")
         dyn_star = np.zeros(
-            (nq, 3, 3, self.nat, self.nat), dtype=np.complex128, order="F"
+            (nq_total, 3, 3, self.nat, self.nat), dtype=np.complex128, order="F"
         )
         print("self.nsym:", self.nsym)
         dyn_star = espresso_symm.q2qstar_out(
@@ -321,11 +327,11 @@ class Symmetrizer:
             self.invs,  # Index of inverse of s in self.s
             self.irt,  # Index of atom you get from apply S to atom a
             self.rtau,  # Array with S.r_a - r_a for each symm op and atom a
-            nq_new,  # Number of q points in the star
+            nq_no_mq,  # Number of q points in the star
             sxq,  # S.q for each symmetry in the crystal
             isq,  # Index of S.q in sxq for each S
             imq,  # Index of -q in sxq for each S
-            nq,  # ????
+            nq_total,  # Will be 2*nq_no_mq only if -q is NOT in the star
             nat=self.nat,  # Number of atoms in the crystal
         )
 
