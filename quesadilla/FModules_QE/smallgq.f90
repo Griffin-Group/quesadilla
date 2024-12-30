@@ -76,8 +76,8 @@ subroutine set_irotmq (xq,s,nsymq,nsym, irotmq, minus_q, bg, at, lgamma)
                 aq (jpol)
         enddo
      enddo
-     !if (.NOT. eqvect (raq, aq, zero) ) CALL errore('set_giq',&
-     !                       'problems with the input group',1)
+     if (.NOT. eqvect (raq, aq, zero) ) CALL errore('set_giq',&
+                            'problems with the input group',1)
      do ipol = 1, 3
         wrk (ipol) = raq (ipol) - aq (ipol)
      enddo
