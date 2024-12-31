@@ -67,6 +67,35 @@ class Symmetrizer:
             order="F",
         )
 
+    def setup_lattice_symmetries(self, verbose: bool = False):
+        espresso_symm.symm_base.set_at_bg(self.at, self.bg)
+
+        # Prepare the symmetries
+        espresso_symm.symm_base.set_sym_bl()
+
+        self.s = np.copy(espresso_symm.symm_base.s)
+        self.ft = np.copy(espresso_symm.symm_base.ft)
+        self.nsym = espresso_symm.symm_base.nrot
+
+        if verbose:
+            print("Symmetries of the bravais lattice:", self.nsym)
+
+    def setup_crystal_symmetries(self, verbose: bool = False):
+        # TODO: implement magnetism (currently just a dummy variable)
+        # TODO: some lines in symm_base need to be uncommented/checked
+        m_loc = np.zeros((3, self.nat), dtype=np.float64, order="F")
+
+        # Find the symmetries of the crystal
+        espresso_symm.symm_base.find_sym(self.tau, self.ityp, False, m_loc, False)
+
+        # Copy into python
+        self.s = np.copy(espresso_symm.symm_base.s)
+        self.ft = np.copy(espresso_symm.symm_base.ft)
+        self.nsym = espresso_symm.symm_base.nsym
+
+        if verbose:
+            print("Symmetries of the crystal:", self.nsym)
+
     def setup_little_cogroup(self, q: ArrayLike, verbose: bool = False):
         """
         Get symmetries of the small group of q
@@ -80,35 +109,11 @@ class Symmetrizer:
         """
         q = np.array(q, dtype=np.float64, order="F")
 
-        # ------- BRAVAIS LATTICE SYMMETRIES -------
         # Setup the bravais lattice
-        espresso_symm.symm_base.set_at_bg(self.at, self.bg)
-
-        # Prepare the symmetries
-        espresso_symm.symm_base.set_sym_bl()
-
-        if verbose:
-            print("Symmetries of the bravais lattice:", espresso_symm.symm_base.nrot)
-        # Now copy all the work initialized on the symmetries inside python
-        self.s = np.copy(espresso_symm.symm_base.s)
-        self.ft = np.copy(espresso_symm.symm_base.ft)
-        self.nsym = espresso_symm.symm_base.nrot
-        # ---------------------------
+        # self.setup_lattice_symmetries(verbose)
 
         # ------- CRYSTAL SYMMETRIES -------
-        # TODO: implement magnetism (currently just a dummy variable)
-        # TODO: some lines in symm_base need to be uncommented/checked
-        m_loc = np.zeros((3, self.nat), dtype=np.float64, order="F")
-
-        # Find the symmetries of the crystal
-        espresso_symm.symm_base.find_sym(self.tau, self.ityp, False, m_loc, False)
-        # Now copy all the work initialized on the symmetries inside python
-        self.s = np.copy(espresso_symm.symm_base.s)
-        self.ft = np.copy(espresso_symm.symm_base.ft)
-        self.nsym = espresso_symm.symm_base.nsym
-
-        if verbose:
-            print("Symmetries of the crystal:", self.nsym)
+        # self.setup_crystal_symmetries(verbose)
 
         # -----------------------------------
 
@@ -174,10 +179,7 @@ class Symmetrizer:
             self.at, self.bg, self.nsym, self.s, self.irt, self.tau
         )
 
-    def setup_sg_symmetries(self, verbose=False):
-        self.setup_little_cogroup([0, 0, 0], verbose=verbose)
-
-    def get_star_q(self, q: ArrayLike, verbose=False):
+    def get_star_q(self, q: ArrayLike, verbose: bool = False, debug: bool = False):
         """
         GET THE Q STAR
         ==============
@@ -195,82 +197,68 @@ class Symmetrizer:
             q_star : ndarray(size = (nq_star, 3), dtype = np.float64)
                 The complete q star
         """
-        ######################### star of q #########################
-        # TODO: replace with this
-        # do na = 1, nat
-        # do nb = 1, nat
-        #    call trntnsc (phi (1, 1, na, nb), at, bg, - 1) ! TODO: provide this routine
-        # enddo
-        # enddo
-        # CALL symdynph_gq_new (xq, phi, s, invs, rtau, irt, nsymq, nat, &
-        #    irotmq, minus_q) ! TODO: provide this routine
-        # do na = 1, nat
-        # do nb = 1, nat
-        #    call trntnsc (phi (1, 1, na, nb), at, bg, + 1) ! TODO: provide this routine
-        # enddo
-        # enddo
         #!
         # CALL star_q(xq, at, bg, nsym, s, invs, nqs, sxq, isq, imq, .true. ) ! TODO: provide
         q = np.array(q, dtype=np.float64, order="F")
-        self.setup_sg_symmetries(verbose=False)
-        full_symmetries = np.copy(self.s)
-        full_invs = np.copy(self.invs)
-        # self.setup_little_cogroup(q, verbose=False)
-        q = np.array(
+        self.setup_lattice_symmetries(verbose)
+        self.setup_crystal_symmetries(verbose)
+        crystal_symmetries = np.copy(self.s)
+        crystal_invs = np.copy(self.invs)
+
+        self.setup_little_cogroup(q, verbose)
+
+        xq = np.array(
             self.structure.lattice.reciprocal_lattice.get_cartesian_coords(q)
             / (2 * np.pi),
             dtype=np.float64,
             order="F",
         )
 
-        self.setup_little_cogroup(q, verbose=True)
         # Returns:
         # 1. number of q-points in the star
         # 2. The vector that q is mapped to under each symmop
         # 3. Index of q in sxq
         # 4. Index of -q in sxq, 0 if not present
-        nq_new, sxq, isq, imq = espresso_symm.star_q(
-            q,  # q point in cartesian coordinates/2pi
+        nqs, sxq, isq, imq = espresso_symm.star_q(
+            xq,  # q point in cartesian coordinates/2pi
             self.at,  # lattice vectors (see __init__ for format)
             self.bg,  # rec. lattice vectors (see __init__ for format)
-            self.nsymq,  # Number of symmetries in the small group of q
-            full_symmetries,  # Array of ALL symmetries of the crystal
-            full_invs,  # Index of inverse of s in self.s
-            verbose,  # Verbosity flag
+            self.nsym,  # Number of symmetries in the small group of q
+            crystal_symmetries,  # Array of ALL symmetries of the crystal
+            crystal_invs,  # Index of inverse of s in self.s
+            debug,  # Verbosity flag
         )
+        xq_star = sxq[:, :nqs].T
+        q_star = np.array(
+            [
+                self.structure.lattice.reciprocal_lattice.get_fractional_coords(
+                    xqs * (2 * np.pi)
+                )
+                for xqs in xq_star
+            ]
+        )
+        if verbose:
+            print("Number of q in the star:", nqs)
+            print("List of q in the star:")
+            for i, qq in enumerate(q_star):
+                print(f"{i+1}    {np.round(qq, 8)}")
+            if imq == 0:
+                print("In addition, there is the -q list, which is NOT in the star:")
+                for i, qq in enumerate(q_star):
+                    print(f"{i+1+nqs}    {np.round(qq, 8)}")
+            else:
+                mxq = sxq[:, imq - 1]
+                mq = self.structure.lattice.reciprocal_lattice.get_fractional_coords(
+                    mxq * (2 * np.pi)
+                )
+                gmq = self.structure.lattice.reciprocal_lattice.get_fractional_coords(
+                    self.gimq * (2 * np.pi)
+                )
+                print("-q is also in the star: ", np.round(mq, 8))
+                print("With G = ", np.round(gmq, 8))
+                print("So that S_ @ q - (-q + G)", np.round(mq + q - gmq, 5))
 
-        # print("----------Inside routine get_star_q")
-        # print("I am getting nq_new:", nq_new)
-        # print("I am getting sxq:", sxq.T[:nq_new])
-        # print("I am getting isq:", isq)
-        # print("I am getting imq:", imq)
-        # do while (isq (isym) /= imq)
-        #    isym = isym + 1
-        # enddo
-        # irotmq = np.where(isq == imq)[0][0]
-        # print("I am getting irotmq:", irotmq)
-        ##if imq > 0 and not np.allclose(sxq[:, irotmq], -q, atol=1e-3, rtol=0):
-        ##    print("WARNING: sxq[imq] is not the inverse of -q")
-        # print(f"sxq[{irotmq}]:", sxq[:, irotmq])
-        # print("-q:", -q)
-        # print("----------End of Inside routine get_star_q")
-
-        # TODO: this implementation is quite confusing
-        # TODO: it is only really necessary because the imq thing doesn't
-        # TODO: work properly for nonsymmorphic space groups
-        if imq != 0:
-            total_star = np.zeros((nq_new, 3), dtype=np.float64)
-        else:
-            # If -q is not in the star we stick it in there
-            total_star = np.zeros((2 * nq_new, 3), dtype=np.float64)
-
-        total_star[:nq_new, :] = sxq[:, :nq_new].T
-
-        if imq == 0:
-            # Stick -q into the star
-            total_star[nq_new:, :] = -sxq[:, :nq_new].transpose()
-
-        return total_star
+        return q_star
 
     def get_fcq_in_star(self, fcq, q):
         """
@@ -287,6 +275,24 @@ class Symmetrizer:
                 The q vectors that belongs to the same star
         """
 
+        # TODO: REWRITE like this
+        # DO i = 1, 3 * nat
+        # na = (i - 1) / 3 + 1
+        # icar = i - 3 * (na - 1)
+        # DO j = 1, 3 * nat
+        #    nb = (j - 1) / 3 + 1
+        #    jcar = j - 3 * (nb - 1)
+        #    d2 (i, j) = phi(icar, jcar, na, nb)
+        # ENDDO
+        # ENDDO
+        #!
+        #!if (imq == 0) then
+        #!    nq_tot = 2 * nq
+        #! else
+        #!    nq_tot = nq
+        #!end if
+        # CALL q2qstar_ph (d2, at, bg, nat, nsym, s, invs, irt, rtau, &
+        #                nqs, sxq, isq, imq, 1) ! TODO: provide this routine
         # Setup all the symmetries
         q = np.array(q, dtype=np.float64, order="F")
         q_star = self.get_star_q(q, verbose=False)
@@ -376,6 +382,20 @@ class Symmetrizer:
 
     #    The input dynamical matrix will be modified by the current code.
     #    """
+    ######################### star of q #########################
+    # TODO: replace with this
+    # do na = 1, nat
+    # do nb = 1, nat
+    #    call trntnsc (phi (1, 1, na, nb), at, bg, - 1) ! TODO: provide this routine
+    # enddo
+    # enddo
+    # CALL symdynph_gq_new (xq, phi, s, invs, rtau, irt, nsymq, nat, &
+    #    irotmq, minus_q) ! TODO: provide this routine
+    # do na = 1, nat
+    # do nb = 1, nat
+    #    call trntnsc (phi (1, 1, na, nb), at, bg, + 1) ! TODO: provide this routine
+    # enddo
+    # enddo
 
     #    # TODO: implement hermitianity to speedup the conversion
 
