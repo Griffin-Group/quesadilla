@@ -46,13 +46,13 @@ subroutine q2qstar_ph(fcq, at, bg, nat, nsym, s, invs, irt, rtau, &
   !! list of q in the star
   integer, intent(in) :: nq_tot
   !! Total number of q accounting for the -q if it's not already present
-  double complex, intent(out) :: fcqstar(nq_tot, 3*nat, 3*nat)
+  double complex, intent(out) :: fcqstar(nq_tot, 3, 3, nat, nat)
   !! the output dynamical matrix at each q in the star
 
   !
   ! ... local variables
   !
-  integer :: na, nb, iq, nsq, isym, i, j, counter
+  integer :: na, nb, iq, nsq, isym, i, j, counter, icar, jcar
   ! counters
   ! nsq: number of sym.op. giving each q in the list
 
@@ -68,8 +68,19 @@ subroutine q2qstar_ph(fcq, at, bg, nat, nsym, s, invs, irt, rtau, &
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   ! Writes dyn.mat. dyn(3*nat,3*nat) on the 4-index array phi(3,3,nat,nat)
   !
-  CALL scompact_dyn(nat, fcq, phi)
+  !CALL scompact_dyn(nat, fcq, phi)
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  !phi = fcq
+  do i = 1, 3 * nat
+    na = (i - 1) / 3 + 1
+    icar = i - 3 * (na - 1)
+    do j = 1, 3 * nat
+       nb = (j - 1) / 3 + 1
+       jcar = j - 3 * (nb - 1)
+       phi (icar, jcar, na, nb) = fcq (i, j)
+       !print *, "PHI1:", icar, jcar, na,nb, phi(icar, jcar, na, nb)
+    enddo
+  enddo
   !
   ! Go from Cartesian to Crystal coordinates
   !
@@ -160,8 +171,9 @@ subroutine q2qstar_ph(fcq, at, bg, nat, nsym, s, invs, irt, rtau, &
       phiqstar(counter + nq, :, :, :, :) = phi2
     end if
   end do
-  DO iq = 1, nq_tot
-    CALL compact_dyn(nat, fcqstar(iq, :, :), phiqstar(iq, :, :, :, :))
+  fcqstar = phiqstar
+  !DO iq = 1, nq_tot
+  !  !CALL compact_dyn(nat, fcqstar(iq, :, :), phiqstar(iq, :, :, :, :))
   !  DO i = 1, 3*nat
   !    na = (i - 1)/3 + 1
   !    icar = i - 3*(na - 1)
@@ -171,7 +183,7 @@ subroutine q2qstar_ph(fcq, at, bg, nat, nsym, s, invs, irt, rtau, &
   !      fcqstar(iq, i, j) = phiqstar(iq, icar, jcar, na, nb)
   !    END DO
   !  END DO
-  END DO
+  !END DO
   !
   return
 end subroutine q2qstar_ph

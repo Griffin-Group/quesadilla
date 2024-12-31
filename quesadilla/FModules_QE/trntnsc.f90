@@ -70,56 +70,56 @@ subroutine trntnsc (phi, at, bg, iflg)
 end subroutine trntnsc
 
 !-----------------------------------------------------------------------
-SUBROUTINE compact_dyn(nat, dyn, phi)
-   !-----------------------------------------------------------------------
-   !! This routine writes the dynamical matrix from a 3,3,nat,nat array
-   !! to a 3*nat,3*nat array.
-   !
-   IMPLICIT NONE
-   INTEGER, INTENT(IN) :: nat
-   double complex, INTENT(IN) :: phi(3,3,nat,nat)
-   double complex, INTENT(OUT) :: dyn(3*nat, 3*nat)
- 
-   INTEGER :: na, nb, icart, jcart, imode, jmode
- 
-   DO na = 1, nat
-      DO icart = 1, 3
-         imode = 3 * ( na - 1 ) + icart
-         DO nb = 1, nat
-            DO jcart = 1, 3
-               jmode = 3 * ( nb - 1 ) + jcart
-               dyn (imode, jmode) = phi (icart, jcart, na, nb)
-            END DO 
-         END DO
-      END DO
-   END DO
-   RETURN
-   END SUBROUTINE compact_dyn
- !
- !-----------------------------------------------------------------------
-   SUBROUTINE scompact_dyn(nat, dyn, phi)
-   !-----------------------------------------------------------------------
-   !! This routine writes the dynamical matrix from a 3*nat,3*nat array
-   !! to a 3,3,nat,nat array.
-   !
- 
-   IMPLICIT NONE
-   INTEGER, INTENT(IN) :: nat
-   double complex, INTENT(OUT) :: phi(3,3,nat,nat)
-   double complex, INTENT(IN) :: dyn(3*nat, 3*nat)
- 
-   INTEGER :: na, nb, icart, jcart, imode, jmode
- 
-   DO na = 1, nat
-      DO icart = 1, 3
-         imode = 3 * ( na - 1 ) + icart
-         DO nb = 1, nat
-            DO jcart = 1, 3
-               jmode = 3 * ( nb - 1 ) + jcart
-               phi (icart, jcart, na, nb) = dyn (imode, jmode) 
-            END DO 
-         END DO
-      END DO
-   END DO
-   RETURN
-   END SUBROUTINE scompact_dyn
+!SUBROUTINE compact_dyn(nat, dyn, phi)
+!   !-----------------------------------------------------------------------
+!   !! This routine writes the dynamical matrix from a 3,3,nat,nat array
+!   !! to a 3*nat,3*nat array.
+!   !
+!   IMPLICIT NONE
+!   INTEGER, INTENT(IN) :: nat
+!   double complex, INTENT(IN) :: phi(3,3,nat,nat)
+!   double complex, INTENT(OUT) :: dyn(3*nat, 3*nat)
+! 
+!   INTEGER :: na, nb, icart, jcart, imode, jmode
+! 
+!   DO na = 1, nat
+!      DO icart = 1, 3
+!         imode = 3 * ( na - 1 ) + icart
+!         DO nb = 1, nat
+!            DO jcart = 1, 3
+!               jmode = 3 * ( nb - 1 ) + jcart
+!               dyn (imode, jmode) = phi (icart, jcart, na, nb)
+!            END DO 
+!         END DO
+!      END DO
+!   END DO
+!   RETURN
+!   END SUBROUTINE compact_dyn
+! !
+! !-----------------------------------------------------------------------
+!SUBROUTINE scompact_dyn(nat, dyn, phi)
+!   !-----------------------------------------------------------------------
+!   !! This routine writes the dynamical matrix from a 3*nat,3*nat array
+!   !! to a 3,3,nat,nat array.
+!   !
+! 
+!   IMPLICIT NONE
+!   INTEGER, INTENT(IN) :: nat
+!   double complex, INTENT(OUT) :: phi(3,3,nat,nat)
+!   double complex, INTENT(IN) :: dyn(3*nat, 3*nat)
+! 
+!   INTEGER :: na, nb, icart, jcart, imode, jmode
+! 
+!   DO na = 1, nat
+!      DO icart = 1, 3
+!         imode = 3 * ( na - 1 ) + icart
+!         DO nb = 1, nat
+!            DO jcart = 1, 3
+!               jmode = 3 * ( nb - 1 ) + jcart
+!               phi (icart, jcart, na, nb) = dyn (imode, jmode) 
+!            END DO 
+!         END DO
+!      END DO
+!   END DO
+!   RETURN
+!END SUBROUTINE scompact_dyn
