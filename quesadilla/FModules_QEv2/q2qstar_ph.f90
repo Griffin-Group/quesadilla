@@ -7,7 +7,7 @@
 !
 !-----------------------------------------------------------------------
 subroutine q2qstar_ph (dyn, at, bg, nat, nsym, s, invs, irt, rtau, &
-     nq, sxq, isq, imq, iudyn, dynqstar)
+     nq, sxq, isq, imq, nq_tot, dynqstar, qstar)
   !-----------------------------------------------------------------------
   !! Generates the dynamical matrices for the star of q and writes them on
   !! disk for later use.  
@@ -17,41 +17,46 @@ subroutine q2qstar_ph (dyn, at, bg, nat, nsym, s, invs, irt, rtau, &
   !
   implicit none
   !
-  double complex, intent(out) :: dynqstar(nqtot,3,3,nat,nat) 
-  !! the output dynamical matrix at each q in the star
-  integer :: nat
+  integer, intent(in) :: nat
   !! number of atoms in the unit cell
-  integer :: nsym
+  integer, intent(in) :: nsym
   !! number of symmetry operations
-  integer :: s(3,3,48)
+  integer, intent(in) :: s(3,3,48)
   !! the symmetry operations
-  integer :: invs(48)
+  integer, intent(in) :: invs(48)
   !! index of the inverse operations
-  integer :: irt(48,nat)
+  integer, intent(in) :: irt(48,nat)
   !! index of the rotated atom
-  integer :: nq
+  integer, intent(in) :: nq
   !! degeneracy of the star of q
-  integer :: isq(48)
+  integer, intent(in) :: isq(48)
   !! symmetry op. giving the rotated q
-  integer :: imq
+  integer, intent(in) :: imq
   !! index of -q in the star (0 if non present)
-  integer :: iudyn
+  integer, intent(in) :: iudyn
   !! unit number
-  double complex :: dyn(3*nat,3*nat)
+  double complex, intent(in) :: dyn(3*nat,3*nat)
   !! the input dynamical matrix. If \(\text{imq}\) different
   !! from 0 the output matrix is symmetrized w.r.t. time-reversal
-  double precision :: at (3,3)
+  double precision, intent(in) :: at (3,3)
   !! direct lattice vectors
-  double precision :: bg (3,3)
+  double precision, intent(in) :: bg (3,3)
   !! reciprocal lattice vectors
-  double precision :: rtau (3,48,nat)
+  double precision, intent(in) :: rtau (3,48,nat)
   !! for each atom and rotation gives the R vector involved
-  double precision :: sxq (3,48)
+  double precision, intent(in) :: sxq (3,48)
   !! list of q in the star
+  integer, intent(in) :: nq_tot
+  !! Total number of q accounting for the -q if it's not already present
+  double complex, intent(out) :: dynqstar(nq_tot,3,3,nat,nat) 
+  !! the output dynamical matrix at each q in the star
+  double precision, intent(out) :: qstar(nq_tot, 3) 
+
+
   !
   ! ... local variables
   !
-  integer :: na, nb, iq, nsq, isym, icar, jcar, i, j, counter
+  integer :: na, nb, iq, nsq, isym, i, j, counter
   ! counters
   ! nsq: number of sym.op. giving each q in the list
 
@@ -152,7 +157,8 @@ subroutine q2qstar_ph (dyn, at, bg, nat, nsym, s, invs, irt, rtau, &
         !
         ! and writes it (changing temporarily sign to q)
         !
-        dynqstar(counter + nq,:,:,:,:) = phi2
+        counter=counter+1
+        dynqstar(counter,:,:,:,:) = phi2
      endif
   enddo
   !

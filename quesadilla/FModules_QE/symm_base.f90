@@ -328,7 +328,7 @@ subroutine set_sym_bl ( )
 end subroutine set_sym_bl
 !
 !-----------------------------------------------------------------------
-SUBROUTINE find_sym ( nat, tau, ityp, nr1, nr2, nr3, magnetic_sym, m_loc )
+SUBROUTINE find_sym ( nat, tau, ityp, magnetic_sym, m_loc, no_z_inv )
   !-----------------------------------------------------------------------
   !
   !     This routine finds the point group of the crystal, by eliminating
@@ -337,9 +337,10 @@ SUBROUTINE find_sym ( nat, tau, ityp, nr1, nr2, nr3, magnetic_sym, m_loc )
   !
   implicit none
   !
-  integer, intent(in) :: nat, ityp (nat), nr1, nr2, nr3  
+  integer, intent(in) :: nat, ityp (nat)
   double precision, intent(in) :: tau (3,nat), m_loc(3,nat)
   logical, intent(in) :: magnetic_sym
+  logical, intent(in) :: no_z_inv
   !
   logical :: sym (48)
   ! if true the corresponding operation is a symmetry operation
@@ -350,7 +351,7 @@ SUBROUTINE find_sym ( nat, tau, ityp, nr1, nr2, nr3, magnetic_sym, m_loc )
   !
   !    Here we find the true symmetries of the crystal
   !
-  CALL sgam_at ( nat, tau, ityp, nr1, nr2, nr3, sym )
+  CALL sgam_at ( nat, tau, ityp, sym, no_z_inv )
   !
   !    Here we check for magnetic symmetries
   !
@@ -387,182 +388,352 @@ SUBROUTINE find_sym ( nat, tau, ityp, nr1, nr2, nr3, magnetic_sym, m_loc )
 END SUBROUTINE find_sym
 !
 !-----------------------------------------------------------------------
-subroutine sgam_at ( nat, tau, ityp, nr1, nr2, nr3, sym )
-  !-----------------------------------------------------------------------
-  !
-  !     Given the point group of the Bravais lattice, this routine finds 
-  !     the subgroup which is the point group of the considered crystal.
-  !     Non symmorphic groups are allowed, provided that fractional
-  !     translations are allowed (nofrac=.false), that the unit cell is
-  !     not a supercell, and that they are commensurate with the FFT grid
-  !
-  !     On output, the array sym is set to .true.. for each operation
-  !     of the original point group that is also a symmetry operation 
-  !     of the crystal symmetry point group
-  !
-  implicit none
-  !
-  integer, intent(in) :: nat, ityp (nat), nr1, nr2, nr3
-  ! nat  : number of atoms in the unit cell
-  ! ityp : species of each atom in the unit cell
-  ! nr*  : dimensions of the FFT mesh
-  !
-  double precision, intent(in) :: tau (3, nat)
-  !
-  ! tau  : cartesian coordinates of the atoms
-  !
-  !     output variables
-  !
-  logical, intent(out) :: sym (48)
-  ! sym(isym)    : flag indicating if sym.op. isym in the parent group
-  !                is a true symmetry operation of the crystal
-  !
-  integer :: na, kpol, nb, irot, i, j
-  ! counters
-  double precision , allocatable :: xau (:,:), rau (:,:)
-  ! atomic coordinates in crystal axis
-  logical :: fractional_translations
-  double precision :: ft_(3), ft1, ft2, ft3
-  !
-  allocate(xau(3,nat))
-  allocate(rau(3,nat))
-  !
-  !     Compute the coordinates of each atom in the basis of
-  !     the direct lattice vectors
-  !
-  
-  do na = 1, nat
-     xau(:,na) = bg(1,:) * tau(1,na) + bg(2,:) * tau(2,na) + bg(3,:) * tau(3,na)
-  enddo
-
-
-  
-  !
-  !      check if the identity has fractional translations
-  !      (this means that the cell is actually a supercell).
-  !      When this happens, fractional translations are disabled,
-  !      because there is no guarantee that the generated sym.ops.
-  !      form a group
-  !
-  nb = 1
-  irot = 1
-  !
-  fractional_translations = .not. nofrac
-! ***********************************************************************
-! Be careful here... it was commented... probably for odd3 symmetry stuff
-!  do na = 2, nat
-!     if ( fractional_translations ) then
-!        if (ityp (nb) == ityp (na) ) then
-!           ft_(:) = xau(:,na) - xau(:,nb) - nint( xau(:,na) - xau(:,nb) )
-!           !
-!           sym(irot) = checksym ( irot, nat, ityp, xau, xau, ft_ )
-!           !
-!           if ( sym (irot) .and. &
-!               (abs (ft_(1) **2 + ft_(2) **2 + ft_(3) **2) < 1.d-8) ) &
-!               call errore ('sgam_at', 'overlapping atoms', na)
-!           if (sym (irot) ) then
-!              fractional_translations = .false.
-!              WRITE( stdout, '(5x,"Found symmetry operation: I + (",&
-!             &   3f8.4, ")",/,5x,"This is a supercell,", &
-!             &   " fractional translations are disabled")') ft_
+!subroutine sgam_at ( nat, tau, ityp, nr1, nr2, nr3, sym )
+!  !-----------------------------------------------------------------------
+!  !
+!  !     Given the point group of the Bravais lattice, this routine finds 
+!  !     the subgroup which is the point group of the considered crystal.
+!  !     Non symmorphic groups are allowed, provided that fractional
+!  !     translations are allowed (nofrac=.false), that the unit cell is
+!  !     not a supercell, and that they are commensurate with the FFT grid
+!  !
+!  !     On output, the array sym is set to .true.. for each operation
+!  !     of the original point group that is also a symmetry operation 
+!  !     of the crystal symmetry point group
+!  !
+!  implicit none
+!  !
+!  integer, intent(in) :: nat, ityp (nat), nr1, nr2, nr3
+!  ! nat  : number of atoms in the unit cell
+!  ! ityp : species of each atom in the unit cell
+!  ! nr*  : dimensions of the FFT mesh
+!  !
+!  double precision, intent(in) :: tau (3, nat)
+!  !
+!  ! tau  : cartesian coordinates of the atoms
+!  !
+!  !     output variables
+!  !
+!  logical, intent(out) :: sym (48)
+!  ! sym(isym)    : flag indicating if sym.op. isym in the parent group
+!  !                is a true symmetry operation of the crystal
+!  !
+!  integer :: na, kpol, nb, irot, i, j
+!  ! counters
+!  double precision , allocatable :: xau (:,:), rau (:,:)
+!  ! atomic coordinates in crystal axis
+!  logical :: fractional_translations
+!  double precision :: ft_(3), ft1, ft2, ft3
+!  !
+!  allocate(xau(3,nat))
+!  allocate(rau(3,nat))
+!  !
+!  !     Compute the coordinates of each atom in the basis of
+!  !     the direct lattice vectors
+!  !
+!  
+!  do na = 1, nat
+!     xau(:,na) = bg(1,:) * tau(1,na) + bg(2,:) * tau(2,na) + bg(3,:) * tau(3,na)
+!  enddo
+!
+!
+!  
+!  !
+!  !      check if the identity has fractional translations
+!  !      (this means that the cell is actually a supercell).
+!  !      When this happens, fractional translations are disabled,
+!  !      because there is no guarantee that the generated sym.ops.
+!  !      form a group
+!  !
+!  nb = 1
+!  irot = 1
+!  !
+!  fractional_translations = .not. nofrac
+!! ***********************************************************************
+!! Be careful here... it was commented... probably for odd3 symmetry stuff
+!!  do na = 2, nat
+!!     if ( fractional_translations ) then
+!!        if (ityp (nb) == ityp (na) ) then
+!!           ft_(:) = xau(:,na) - xau(:,nb) - nint( xau(:,na) - xau(:,nb) )
+!!           !
+!!           sym(irot) = checksym ( irot, nat, ityp, xau, xau, ft_ )
+!!           !
+!!           if ( sym (irot) .and. &
+!!               (abs (ft_(1) **2 + ft_(2) **2 + ft_(3) **2) < 1.d-8) ) &
+!!               call errore ('sgam_at', 'overlapping atoms', na)
+!!           if (sym (irot) ) then
+!!              fractional_translations = .false.
+!!              WRITE( stdout, '(5x,"Found symmetry operation: I + (",&
+!!             &   3f8.4, ")",/,5x,"This is a supercell,", &
+!!             &   " fractional translations are disabled")') ft_
+!!           endif
+!!        endif
+!!     end if
+!!  enddo
+!!  !
+!! *********************************************************************
+!  nsym_ns = 0 
+!  do irot = 1, nrot
+!     ! COMMENTED BY LORENZO MONACELLI
+!     ! !
+!     ! ! check that the grid is compatible with the S rotation
+!     ! !
+!     ! if ( mod (s (2, 1, irot) * nr1, nr2) /= 0 .or. &
+!     !      mod (s (3, 1, irot) * nr1, nr3) /= 0 .or. &
+!     !      mod (s (1, 2, irot) * nr2, nr1) /= 0 .or. &
+!     !      mod (s (3, 2, irot) * nr2, nr3) /= 0 .or. &
+!     !      mod (s (1, 3, irot) * nr3, nr1) /= 0 .or. &
+!     !      mod (s (2, 3, irot) * nr3, nr2) /= 0 ) then
+!     !    sym (irot) = .false.
+!     !    print  '(3i4)', ( (s (i, j, irot) , j = 1, 3) , i = 1, 3)
+!     !    goto 100
+!     ! endif
+!
+!     do na = 1, nat
+!        ! rau = rotated atom coordinates
+!        rau (:, na) = s (1,:, irot) * xau (1, na) + &
+!                      s (2,:, irot) * xau (2, na) + &
+!                      s (3,:, irot) * xau (3, na)
+!     enddo
+!     !
+!     !      first attempt: no fractional translation
+!     !
+!     ftau (:, irot) = 0
+!     ft (:, irot) = 0
+!     ft_(:) = 0.d0
+!     !
+!     sym(irot) = checksym ( irot, nat, ityp, xau, rau, ft_ )
+!     !
+!     if (.not.sym (irot) .and. fractional_translations) then
+!        nb = 1
+!        do na = 1, nat
+!           if (ityp (nb) == ityp (na) ) then
+!              !
+!              !      second attempt: check all possible fractional translations
+!              !
+!              ft_ (:) = rau(:,na) - xau(:,nb) - nint( rau(:,na) - xau(:,nb) )
+!              !
+!              sym(irot) = checksym ( irot, nat, ityp, xau, rau, ft_ )
+!              !
+!              if (sym (irot) ) then
+!                 nsym_ns = nsym_ns + 1
+!                 ft (:,irot) = ft_(:)
+!                 go to 100
+!              end if
 !           endif
-!        endif
-!     end if
+!        enddo
+!
+!     endif
+!100  continue
 !  enddo
 !  !
-! *********************************************************************
-  nsym_ns = 0 
-  do irot = 1, nrot
-     ! COMMENTED BY LORENZO MONACELLI
-     ! !
-     ! ! check that the grid is compatible with the S rotation
-     ! !
-     ! if ( mod (s (2, 1, irot) * nr1, nr2) /= 0 .or. &
-     !      mod (s (3, 1, irot) * nr1, nr3) /= 0 .or. &
-     !      mod (s (1, 2, irot) * nr2, nr1) /= 0 .or. &
-     !      mod (s (3, 2, irot) * nr2, nr3) /= 0 .or. &
-     !      mod (s (1, 3, irot) * nr3, nr1) /= 0 .or. &
-     !      mod (s (2, 3, irot) * nr3, nr2) /= 0 ) then
-     !    sym (irot) = .false.
-     !    print  '(3i4)', ( (s (i, j, irot) , j = 1, 3) , i = 1, 3)
-     !    goto 100
-     ! endif
+!  ! convert ft to FFT coordinates, check if compatible with FFT grid
+!  ! for real-space symmetrization (if done: currently, exx, phonon)
+!  ! 
+!  nsym_na = 0
+!  do irot =1, nrot
+!     if ( sym(irot) .AND. .NOT. allfrac ) then
+!        ft1 = ft(1,irot) * nr1
+!        ft2 = ft(2,irot) * nr2
+!        ft3 = ft(3,irot) * nr3
+!        ! check if the fractional translations are commensurate
+!        ! with the FFT grid, discard sym.op. if not
+!        ! (needed because ph.x symmetrizes in real space)
+!        ! COMMENTED BY LORENZO MONACELLI (WE DO NOT NEED THIS CHECK)
+!        if (abs (ft1 - nint (ft1) ) / nr1 > eps2 .or. &
+!            abs (ft2 - nint (ft2) ) / nr2 > eps2 .or. &
+!            abs (ft3 - nint (ft3) ) / nr3 > eps2 ) then
+!            !     WRITE( stdout, '(5x,"warning: symmetry operation", &
+!            !          &     " # ",i2," not allowed.   fractional ", &
+!            !          &     "translation:"/5x,3f11.7,"  in crystal", &
+!            !          &     " coordinates")') irot, ft_
+!            sym (irot) = .false.
+!            nsym_na = nsym_na + 1
+!            nsym_ns = nsym_ns - 1
+!         endif
+!         ftau (1, irot) = nint (ft1)
+!         ftau (2, irot) = nint (ft2)
+!         ftau (3, irot) = nint (ft3)
+!      end if
+!  end do
+!  !
+!  !   deallocate work space
+!  !
+!  deallocate (rau)
+!  deallocate (xau)
+!  !
+!  return
+!end subroutine sgam_at
 
-     do na = 1, nat
-        ! rau = rotated atom coordinates
-        rau (:, na) = s (1,:, irot) * xau (1, na) + &
-                      s (2,:, irot) * xau (2, na) + &
-                      s (3,:, irot) * xau (3, na)
-     enddo
+   SUBROUTINE sgam_at(nat, tau, ityp, sym, no_z_inv )
+     !-----------------------------------------------------------------------
+     !! Given the point group of the Bravais lattice, this routine finds
+     !! the subgroup which is the point group of the considered crystal.  
+     !! Non symmorphic groups are allowed, provided that fractional
+     !! translations are allowed (nofrac=.false) and that the unit cell
+     !! is not a supercell.
      !
-     !      first attempt: no fractional translation
+     !! On output, the array sym is set to .TRUE.. for each operation
+     !! of the original point group that is also a symmetry operation
+     !! of the crystal symmetry point group.
      !
-     ftau (:, irot) = 0
-     ft (:, irot) = 0
-     ft_(:) = 0.d0
+     IMPLICIT NONE
      !
-     sym(irot) = checksym ( irot, nat, ityp, xau, rau, ft_ )
+     INTEGER, INTENT(IN) :: nat
+     !! number of atoms in the unit cell
+     INTEGER, INTENT(IN) :: ityp(nat)
+     !! species of each atom in the unit cell
+     double precision, INTENT(IN) :: tau(3,nat)
+     !! cartesian coordinates of the atoms
+     LOGICAL, INTENT(IN), OPTIONAL :: no_z_inv
+     !! if .TRUE., disable symmetry operations sending z into -z.  
+     !! Some calculations (e.g. gate fields) require this
+     LOGICAL, INTENT(OUT) :: sym(48)
+     !! flag indicating if sym.op. isym in the parent group
+     !! is a true symmetry operation of the crystal.
      !
-     if (.not.sym (irot) .and. fractional_translations) then
-        nb = 1
-        do na = 1, nat
-           if (ityp (nb) == ityp (na) ) then
-              !
-              !      second attempt: check all possible fractional translations
-              !
-              ft_ (:) = rau(:,na) - xau(:,nb) - nint( rau(:,na) - xau(:,nb) )
-              !
-              sym(irot) = checksym ( irot, nat, ityp, xau, rau, ft_ )
-              !
-              if (sym (irot) ) then
-                 nsym_ns = nsym_ns + 1
-                 ft (:,irot) = ft_(:)
-                 go to 100
-              end if
-           endif
-        enddo
-
-     endif
-100  continue
-  enddo
-  !
-  ! convert ft to FFT coordinates, check if compatible with FFT grid
-  ! for real-space symmetrization (if done: currently, exx, phonon)
-  ! 
-  nsym_na = 0
-  do irot =1, nrot
-     if ( sym(irot) .AND. .NOT. allfrac ) then
-        ft1 = ft(1,irot) * nr1
-        ft2 = ft(2,irot) * nr2
-        ft3 = ft(3,irot) * nr3
-        ! check if the fractional translations are commensurate
-        ! with the FFT grid, discard sym.op. if not
-        ! (needed because ph.x symmetrizes in real space)
-        ! COMMENTED BY LORENZO MONACELLI (WE DO NOT NEED THIS CHECK)
-        if (abs (ft1 - nint (ft1) ) / nr1 > eps2 .or. &
-            abs (ft2 - nint (ft2) ) / nr2 > eps2 .or. &
-            abs (ft3 - nint (ft3) ) / nr3 > eps2 ) then
-            !     WRITE( stdout, '(5x,"warning: symmetry operation", &
-            !          &     " # ",i2," not allowed.   fractional ", &
-            !          &     "translation:"/5x,3f11.7,"  in crystal", &
-            !          &     " coordinates")') irot, ft_
-            sym (irot) = .false.
-            nsym_na = nsym_na + 1
-            nsym_ns = nsym_ns - 1
-         endif
-         ftau (1, irot) = nint (ft1)
-         ftau (2, irot) = nint (ft2)
-         ftau (3, irot) = nint (ft3)
-      end if
-  end do
-  !
-  !   deallocate work space
-  !
-  deallocate (rau)
-  deallocate (xau)
-  !
-  return
-end subroutine sgam_at
+     ! ... local variables
+     !
+     INTEGER :: na, kpol, nb, irot, i, j
+     ! counters
+     double precision , ALLOCATABLE :: xau(:,:), rau(:,:)
+     ! atomic coordinates in crystal axis
+     LOGICAL :: fractional_translations, no_z
+     INTEGER :: nfrac
+     double precision :: ft_(3), ftaux(3)
+     !
+     ALLOCATE( xau(3,nat) )
+     ALLOCATE( rau(3,nat) )
+     !
+     ! ... Compute the coordinates of each atom in the basis of
+     ! the direct lattice vectors
+     DO na = 1, nat
+        xau(:,na) = bg(1,:)*tau(1,na) + bg(2,:)*tau(2,na) + bg(3,:)*tau(3,na)
+     ENDDO
+     !
+     ! ... check if the identity has fractional translations (this means
+     ! that the cell is actually a supercell). When this happens, fractional
+     ! translations are disabled, because there is no guarantee that the 
+     ! generated sym.ops. form a group.
+     !
+     nb = 1
+     irot = 1
+     !
+     fractional_translations = .NOT. nofrac
+     !
+     !IF ( fractional_translations ) THEN
+     !   DO na = 2, nat
+     !       IF ( (colin_mag >= 0 .AND. chem_symb( atm(ityp(nb)) ) == chem_symb( atm(ityp(na)) ) ) & 
+     !            .OR. (colin_mag < 0 .AND. ityp(nb) == ityp(na) ) )THEN
+     !       !IF ( ityp(nb) == ityp(na) ) THEN
+     !          !
+     !         ft_(:) = xau(:,na) - xau(:,nb) - NINT( xau(:,na) - xau(:,nb) )
+     !         sym(irot) = checksym ( irot, nat, ityp, xau, xau, ft_ )
+     !         IF (sym(irot)) THEN
+     !            fractional_translations = .FALSE.
+     !            WRITE( *, '(5x,"Found identity + (",&
+     !           &   3f8.4, ") symmetry",/,5x,"This is a supercell,", &
+     !           &   " fractional translations are disabled")') ft_
+     !            GOTO 10
+     !         ENDIF
+     !         !
+     !      ENDIF
+     !   ENDDO
+     !ENDIF
+     !
+     !10 CONTINUE
+     ! 
+     nsym_ns = 0
+     !fft_fact(:) = 1
+     !
+     DO irot = 1, nrot
+        !
+        DO na = 1, nat
+           ! rau = rotated atom coordinates
+           rau(:,na) = s(1,:,irot) * xau(1,na) + &
+                       s(2,:,irot) * xau(2,na) + &
+                       s(3,:,irot) * xau(3,na)
+        ENDDO
+        !
+        ! ... first attempt: no fractional translation
+        ft(:,irot) = 0
+        ft_(:) = 0.d0
+        !
+        sym(irot) = checksym( irot, nat, ityp, xau, rau, ft_ )
+        !
+        IF (.NOT.sym(irot) .AND. fractional_translations) THEN
+           nb = 1
+           DO na = 1, nat
+               ! --> OAA: Need to bring this back for magnetism
+               !IF ( (colin_mag >= 0 .AND. chem_symb( atm(ityp(nb)) ) == chem_symb( atm(ityp(na)) ) ) & 
+               !     .OR. (colin_mag < 0 .AND. ityp(nb) == ityp(na) ) )THEN
+               IF ( ityp(nb) == ityp(na) ) THEN
+                  !
+                 ! ... second attempt: check all possible fractional translations
+                 ft_(:) = rau(:,na) - xau(:,nb) - NINT( rau(:,na) - xau(:,nb) )
+                 !
+                 ! ... ft_ is in crystal axis and is a valid fractional translation
+                 ! only if ft_(i)=0 or ft_(i)=1/n, with n=2,3,4,6
+                 !
+                 DO i = 1, 3
+                    IF ( ABS (ft_(i)) > eps2 ) THEN
+                       ftaux(i) = ABS (1.0D0/ft_(i) - NINT(1.0D0/ft_(i)) )
+                       nfrac = NINT(1.0D0/ABS(ft_(i)))
+                       IF ( ftaux(i) < eps2 .AND. nfrac /= 2 .AND. &
+                            nfrac /= 3 .AND. nfrac /= 4 .AND. nfrac /= 6 ) &
+                            ftaux(i) = 2*eps2
+                    ELSE
+                       ftaux(i) = 0.0D0
+                    ENDIF
+                 ENDDO
+                 !
+                 IF ( ANY( ftaux(:) > eps2 ) ) CYCLE
+                 !
+                 sym(irot) = checksym( irot, nat, ityp, xau, rau, ft_ )
+                 !
+                 IF ( sym(irot) ) THEN
+                    nsym_ns = nsym_ns + 1
+                    ft(:,irot) = ft_(:)
+                    !
+                    ! ... Find factors that must be present in FFT grid dimensions
+                    ! in order to ensure that fractional translations are
+                    ! commensurate with FFT grids.
+                    DO i = 1, 3
+                       IF ( ABS (ft_(i)) > eps2 ) THEN
+                          nfrac = NINT(1.0D0/ABS(ft_(i)))
+                       ELSE
+                          nfrac = 0
+                       END IF
+                       !fft_fact(i) = mcm(fft_fact(i),nfrac)
+                    ENDDO
+                    !
+                    GOTO 20
+                 ENDIF
+              ENDIF
+           ENDDO
+           !
+        ENDIF
+        !
+   20   CONTINUE
+        !
+     ENDDO
+     !
+     ! ... disable all symmetries z -> -z
+     IF ( PRESENT(no_z_inv) ) THEN
+        IF ( no_z_inv ) THEN
+           DO irot = 1, nrot
+              IF (s(3,3,irot) == -1) sym(irot) = .FALSE.
+           ENDDO
+        ENDIF
+     ENDIF
+     !
+     ! ... deallocate work space
+     DEALLOCATE( rau )
+     DEALLOCATE( xau )
+     !
+     RETURN
+     !
+   END SUBROUTINE sgam_at
 !
 !-----------------------------------------------------------------------
 subroutine sgam_at_mag ( nat, m_loc, sym )
@@ -658,7 +829,7 @@ subroutine sgam_at_mag ( nat, m_loc, sym )
   return
 END SUBROUTINE sgam_at_mag
 !
-SUBROUTINE set_sym(nat, tau, ityp, nspin_mag, m_loc, nr1, nr2, nr3)
+SUBROUTINE set_sym(nat, tau, ityp, nspin_mag, m_loc, no_z_inv)
   !
   ! This routine receives as input atomic types and positions, if there
   ! is noncollinear magnetism and the initial magnetic moments, the fft
@@ -670,14 +841,15 @@ SUBROUTINE set_sym(nat, tau, ityp, nspin_mag, m_loc, nr1, nr2, nr3)
   !
   IMPLICIT NONE
   ! input 
-  INTEGER, INTENT(IN)  :: nat, ityp(nat), nspin_mag, nr1, nr2, nr3
+  INTEGER, INTENT(IN)  :: nat, ityp(nat), nspin_mag
+  logical, INTENT(IN) :: no_z_inv
   double precision, INTENT(IN) :: tau(3,nat)
   DOUBLE PRECISION, INTENT(IN) :: m_loc(3,nat) 
   !
   time_reversal = (nspin_mag /= 4)
   t_rev(:) = 0
   CALL set_sym_bl ( )
-  CALL find_sym ( nat, tau, ityp, nr1, nr2, nr3, .not.time_reversal, m_loc )
+  CALL find_sym ( nat, tau, ityp, .not.time_reversal, m_loc, no_z_inv)
   !
   RETURN
   END SUBROUTINE set_sym
@@ -958,97 +1130,97 @@ subroutine s_axis_to_cart ( )
  end subroutine s_axis_to_cart
 
 
- subroutine smallg_q (aq, modenum, sym, minus_q)
-  !-----------------------------------------------------------------------
-  !
-  ! This routine selects, among the symmetry matrices of the point group
-  ! of a crystal, the symmetry operations which leave q unchanged.
-  ! Furthermore it checks if one of the above matrices send q --> -q+G.
-  ! In this case minus_q is set true.
-  !
-  !  input-output variables
-  !
-  implicit none
-
-  double precision, intent(in) :: aq (3)
-  ! input: the q point of the crystal
-  !        IN CRYSTAL UNITS (REMEMBER TO CONVERT IT)
-
-  integer, intent(in) :: modenum
-  ! input: main switch of the program, used for
-  !        q<>0 to restrict the small group of q
-  !        to operation such that Sq=q (exactly,
-  !        without G vectors) when iswitch = -3.
-  ! Note, initialize it with true up to the crystal symmetry
-  logical, intent(inout) :: sym (48)
-  logical, intent(out) :: minus_q
-  ! input-output: .true. if symm. op. S q = q + G
-  ! output: .true. if there is an op. sym.: S q = - q + G
-  !
-  !  local variables
-  !
-
-  double precision :: raq (3), zero (3)
-  ! q vector in crystal basis
-  ! the rotated of the q vector
-  ! the zero vector
-
-  integer :: irot, ipol, jpol
-  ! counter on symmetry op.
-  ! counter on polarizations
-  ! counter on polarizations
-
-  ! logical function, check if two vectors are equa
-  !
-  ! return immediately (with minus_q=.true.) if xq=(0,0,0)
-  !
-  minus_q = .true.
-  if ( (aq (1) == 0.d0) .and. (aq (2) == 0.d0) .and. (aq (3) == 0.d0) ) &
-       return
-  !
-  !   Set to zero some variables
-  !
-  minus_q = .false.
-  zero(:) = 0.d0
-  !
-  !   Transform xq to the crystal basis
-  !
-  ! aq = xq
-  ! call cryst_to_cart (1, aq, at, - 1)
-  ! !
-  !   Test all symmetries to see if this operation send Sq in q+G or in -q+G
-  !
-  do irot = 1, nrot
-     if (.not.sym (irot) ) goto 100
-     raq(:) = 0.d0
-     do ipol = 1, 3
-        do jpol = 1, 3
-           raq(ipol) = raq(ipol) + DBLE( s(ipol,jpol,irot) ) * aq( jpol)
-        enddo
-     enddo
-     sym (irot) = eqvect (raq, aq, zero)
-     !
-     !  if "iswitch.le.-3" (modenum.ne.0) S must be such that Sq=q exactly !
-     !
-     if (modenum.ne.0 .and. sym(irot) ) then
-        do ipol = 1, 3
-           sym(irot) = sym(irot) .and. (abs(raq(ipol)-aq(ipol)) < 1.0d-5)
-        enddo
-     endif
-     if (.not.minus_q) then ! ION ERREA's change
-!     if (sym(irot).and..not.minus_q) then
-        raq = - raq
-        minus_q = eqvect (raq, aq, zero)
-     endif
-100  continue
-  enddo
-  !
-  !  if "iswitch.le.-3" (modenum.ne.0) time reversal symmetry is not included !
-  !
-  if (modenum.ne.0) minus_q = .false.
-  !
-  return
-end subroutine smallg_q
+! subroutine smallg_q (aq, modenum, sym, minus_q)
+!  !-----------------------------------------------------------------------
+!  !
+!  ! This routine selects, among the symmetry matrices of the point group
+!  ! of a crystal, the symmetry operations which leave q unchanged.
+!  ! Furthermore it checks if one of the above matrices send q --> -q+G.
+!  ! In this case minus_q is set true.
+!  !
+!  !  input-output variables
+!  !
+!  implicit none
+!
+!  double precision, intent(in) :: aq (3)
+!  ! input: the q point of the crystal
+!  !        IN CRYSTAL UNITS (REMEMBER TO CONVERT IT)
+!
+!  integer, intent(in) :: modenum
+!  ! input: main switch of the program, used for
+!  !        q<>0 to restrict the small group of q
+!  !        to operation such that Sq=q (exactly,
+!  !        without G vectors) when iswitch = -3.
+!  ! Note, initialize it with true up to the crystal symmetry
+!  logical, intent(inout) :: sym (48)
+!  logical, intent(out) :: minus_q
+!  ! input-output: .true. if symm. op. S q = q + G
+!  ! output: .true. if there is an op. sym.: S q = - q + G
+!  !
+!  !  local variables
+!  !
+!
+!  double precision :: raq (3), zero (3)
+!  ! q vector in crystal basis
+!  ! the rotated of the q vector
+!  ! the zero vector
+!
+!  integer :: irot, ipol, jpol
+!  ! counter on symmetry op.
+!  ! counter on polarizations
+!  ! counter on polarizations
+!
+!  ! logical function, check if two vectors are equa
+!  !
+!  ! return immediately (with minus_q=.true.) if xq=(0,0,0)
+!  !
+!  minus_q = .true.
+!  if ( (aq (1) == 0.d0) .and. (aq (2) == 0.d0) .and. (aq (3) == 0.d0) ) &
+!       return
+!  !
+!  !   Set to zero some variables
+!  !
+!  minus_q = .false.
+!  zero(:) = 0.d0
+!  !
+!  !   Transform xq to the crystal basis
+!  !
+!  ! aq = xq
+!  ! call cryst_to_cart (1, aq, at, - 1)
+!  ! !
+!  !   Test all symmetries to see if this operation send Sq in q+G or in -q+G
+!  !
+!  do irot = 1, nrot
+!     if (.not.sym (irot) ) goto 100
+!     raq(:) = 0.d0
+!     do ipol = 1, 3
+!        do jpol = 1, 3
+!           raq(ipol) = raq(ipol) + DBLE( s(ipol,jpol,irot) ) * aq( jpol)
+!        enddo
+!     enddo
+!     sym (irot) = eqvect (raq, aq, zero)
+!     !
+!     !  if "iswitch.le.-3" (modenum.ne.0) S must be such that Sq=q exactly !
+!     !
+!     if (modenum.ne.0 .and. sym(irot) ) then
+!        do ipol = 1, 3
+!           sym(irot) = sym(irot) .and. (abs(raq(ipol)-aq(ipol)) < 1.0d-5)
+!        enddo
+!     endif
+!     if (.not.minus_q) then ! ION ERREA's change
+!!     if (sym(irot).and..not.minus_q) then
+!        raq = - raq
+!        minus_q = eqvect (raq, aq, zero)
+!     endif
+!100  continue
+!  enddo
+!  !
+!  !  if "iswitch.le.-3" (modenum.ne.0) time reversal symmetry is not included !
+!  !
+!  if (modenum.ne.0) minus_q = .false.
+!  !
+!  return
+!end subroutine smallg_q
 
  
 END MODULE symm_base

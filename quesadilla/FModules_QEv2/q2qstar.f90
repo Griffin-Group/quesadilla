@@ -64,6 +64,7 @@ subroutine q2qstar_out (phi, xq, at, bg, nat, ntyp, ityp, tau, m_loc, nqs,lgamma
     double precision :: xqs(3,48)
     integer               :: isq (48)
     integer :: imq
+    integer :: nq_tot
     !integer :: nsym, nsymq
 
     logical :: sym(48)
@@ -174,6 +175,11 @@ subroutine q2qstar_out (phi, xq, at, bg, nat, ntyp, ityp, tau, m_loc, nqs,lgamma
       ENDDO
     ENDDO
     !
+    !if (imq == 0) then
+    !    nq_tot = 2 * nq
+    ! else
+    !    nq_tot = nq
+    !end if  
     CALL q2qstar_ph (d2, at, bg, nat, nsym, s, invs, irt, rtau, &
                      nqs, sxq, isq, imq, 1) ! TODO: provide this routine
   
