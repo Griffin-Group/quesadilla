@@ -22,6 +22,7 @@ def main():
         "quesadilla/FModules_QE/rotate_and_add_dyn.f90",
         "quesadilla/FModules_QE/star_q.f90",
         "quesadilla/FModules_QE/symm_base.f90",
+        "quesadilla/FModules_QE/q2qstar_ph.f90",
         "quesadilla/FModules_QE/eqvect.f90",
         "quesadilla/FModules_QE/invmat.f90",
         "quesadilla/FModules_QE/sgam_ph.f90",
