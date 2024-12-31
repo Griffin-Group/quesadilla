@@ -39,8 +39,11 @@ class Symmetrizer:
         self.rtau = np.zeros((3, 48, self.nat), dtype=np.float64, order="F")
         # TODO: Array with ??
         self.ft = np.zeros((3, 48), dtype=np.float64, order="F")
+        # Arrays for G vectors
+        self.gi = np.zeros((3, 48), dtype=np.float64, order="F")
+        self.gimq = np.zeros((3), dtype=np.float64, order="F")
 
-        self.minus_q = False
+        self.minus_q = np.array([True], dtype=np.intc)
         self.irotmq = np.intc(0)
         self.nsymq = np.intc(0)
         self.nsym = np.intc(0)
@@ -94,98 +97,82 @@ class Symmetrizer:
 
         # ------- CRYSTAL SYMMETRIES -------
         # TODO: implement magnetism (currently just a dummy variable)
+        # TODO: some lines in symm_base need to be uncommented/checked
         m_loc = np.zeros((3, self.nat), dtype=np.float64, order="F")
 
         # Find the symmetries of the crystal
-        # TODO: this doesn't work for nonsymmorphic SGs?
-        espresso_symm.symm_base.find_sym(self.tau, self.ityp, 6, 6, 6, False, m_loc)
-
-        if verbose:
-            print("Symmetries of the crystal:", espresso_symm.symm_base.nsym)
-
+        espresso_symm.symm_base.find_sym(self.tau, self.ityp, False, m_loc, False)
         # Now copy all the work initialized on the symmetries inside python
         self.s = np.copy(espresso_symm.symm_base.s)
         self.ft = np.copy(espresso_symm.symm_base.ft)
+        self.nsym = espresso_symm.symm_base.nsym
+
+        if verbose:
+            print("Symmetries of the crystal:", self.nsym)
+
         # -----------------------------------
 
         # ------- SMALL GROUP OF Q -------
+
+        #! part 2: this computes gi, gimq
+        #!
+        #! finally this does some of the above again and also computes rtau...
+        #! TODO: provide this routine
+        # ALLOCATE(rtau( 3, 48, nat))
+        # CALL sgam_lr(at, bg, nsym, s, irt, tau, rtau, nat)
+        # -----------------------------
+        # ~~~~~~~~~~PART 1~~~~~~~~~~
+        # minus_q = .true.
+        # sym = .false.
+        # sym(1:nsym) = .true.
+        # CALL smallg_q(xq, 0, at, bg, nsym, s, sym, minus_q)
+        # nsymq = copy_sym(nsym, sym) ! TODO: provide this routine
+        #! recompute the inverses as the order of sym.ops. has changed
+        # CALL inverse_s ( )
         syms = np.zeros((48), dtype=np.intc)
+        syms[: self.nsym] = np.intc(1)
 
-        # Initialize to true the symmetry of the crystal
-        syms[: espresso_symm.symm_base.nsym] = np.intc(1)
-
-        self.minus_q = espresso_symm.symm_base.smallg_q(q, 0, syms)
+        xq = self.structure.lattice.reciprocal_lattice.get_cartesian_coords(q) / (
+            2 * np.pi
+        )
+        espresso_symm.smallg_q(xq, 0, self.at, self.nsym, self.s, syms, self.minus_q)
+        # Copy the symmetries of the small group of q
         self.nsymq = espresso_symm.symm_base.copy_sym(
             espresso_symm.symm_base.nsym, syms
         )
-        self.nsym = espresso_symm.symm_base.nsym
-
-        # Recompute the inverses
+        # Recompute the inverses as the order of sym.ops. has changed
         espresso_symm.symm_base.inverse_s()
-
-        if verbose:
-            print(f"Symmetries of the small group of q = {np.round(q, 5)}:", self.nsymq)
-        # --------------------------------
-
-        # Assign symmetries
+        # Copy stuff into python
         self.s = np.copy(espresso_symm.symm_base.s)
         self.invs = np.copy(espresso_symm.symm_base.invs)
         self.ft = np.copy(espresso_symm.symm_base.ft)
         self.irt = np.copy(espresso_symm.symm_base.irt)
-
-        # Compute the additional shift caused by fractional translations
-        self.rtau = espresso_symm.sgam_ph_new(
-            self.at,
-            self.bg,
-            espresso_symm.symm_base.nsym,
-            self.s,
-            self.irt,
-            self.tau,
-            self.nat,
+        # ~~~~~~~~~~~~~~~~~~~~
+        # PART 2: figure out the q -> -q+G symmetries
+        # call set_giq (xq,s,nsymq,nsym,minus_q,gi,gimq,lgamma) ! TODO: provide this routine
+        # WRITE(*, '(5x,a,i3)') "Symmetries of small group of q:", nsymq
+        # IF(minus_q) WRITE(*, '(10x,a)') "in addition sym. q -> -q+G:"
+        lgamma = np.allclose(q, [0, 0, 0], rtol=0, atol=1e-5)
+        # set_giq (xq,lgamma,bg,at,s,nsymq,nsym,irotmq,minus_q,gi,gimq)
+        self.irotmq, self.gi, self.gimq = espresso_symm.set_giq(
+            xq, lgamma, self.bg, self.at, self.s, self.nsymq, self.nsym, self.minus_q
         )
-
-        # Convert q to cartesian coordinates
-        # lgamma = np.allclose(q, [0, 0, 0])
-        # self.irotmq = 0
-        # if self.minus_q:
-        #    xq = np.array(
-        #        self.structure.lattice.reciprocal_lattice.get_cartesian_coords(q)
-        #        / (2 * np.pi),
-        #        dtype=np.float64,
-        #        order="F",
-        #    )
-        #    self.irotmq = espresso_symm.set_irotmq(
-        #        xq,
-        #        self.s,
-        #        self.nsymq,
-        #        self.nsym,
-        #        self.minus_q,
-        #        self.bg,
-        #        self.at,
-        #        lgamma,
-        #    )
-        #    print("IROTMQ from QE:", self.irotmq)
-        # self.irotmq = 0
-        # if self.minus_q:
-        #   # Get the first symmetry:
-        #   for k in range(self.nsym):
-        #       # Position feels the symmetries with S (fortran S is transposed)
-        #       # While q vector feels the symmetries with S^t (so no .T required for fortran matrix)
-        #       new_q = self.s[:,:, k].dot(q)
-        #       # Compare new_q with aq
-        #       new_q = pbc_diff(new_q, [0, 0, 0])
-        #       if  np.allclose(q, -new_q, atol=1e-3, rtol=0):
-        #           #print("Found a symmetry that maps q to -q")
-        #           #print("Symmetry:", self.s[:,:, k])
-        #           #print("q:", np.round(q, 5))
-        #           #print("new_q:", np.round(new_q, 5))
-        #           self.irotmq = k + 1
-        #           #print("IROTMQ from python:", self.irotmq)
-        #           break
-        #   if self.irotmq == 0:
-        #       #print ("Error, the fortran code tells me there is S so that Sq = -q + G")
-        #       #print ("But I did not find such a symmetry!")
-        #       raise ValueError("Error in the symmetrization. See stdout")
+        if verbose:
+            print(f"Symmetries of the small group of q = {np.round(q, 5)}:", self.nsymq)
+            if self.minus_q:
+                print("in addition sym. q -> -q+G:")
+                print(f"irotmq = {self.irotmq}")
+                gimq = self.structure.lattice.reciprocal_lattice.get_fractional_coords(
+                    self.gimq * 2 * np.pi
+                )
+                print(f"gi = {np.round(gimq, 3)}")
+        # ~~~~~~~~~~~~~~~~~~~~
+        # PART 3: re-set up the symmetries and compute rtau
+        # --------------------------------
+        # sgam_lr(at, bg, nsym, s, irt, tau, rtau, nat)
+        self.rtau = espresso_symm.sgam_lr(
+            self.at, self.bg, self.nsym, self.s, self.irt, self.tau
+        )
 
     def setup_sg_symmetries(self, verbose=False):
         self.setup_little_cogroup([0, 0, 0], verbose=verbose)
@@ -208,6 +195,22 @@ class Symmetrizer:
             q_star : ndarray(size = (nq_star, 3), dtype = np.float64)
                 The complete q star
         """
+        ######################### star of q #########################
+        # TODO: replace with this
+        # do na = 1, nat
+        # do nb = 1, nat
+        #    call trntnsc (phi (1, 1, na, nb), at, bg, - 1) ! TODO: provide this routine
+        # enddo
+        # enddo
+        # CALL symdynph_gq_new (xq, phi, s, invs, rtau, irt, nsymq, nat, &
+        #    irotmq, minus_q) ! TODO: provide this routine
+        # do na = 1, nat
+        # do nb = 1, nat
+        #    call trntnsc (phi (1, 1, na, nb), at, bg, + 1) ! TODO: provide this routine
+        # enddo
+        # enddo
+        #!
+        # CALL star_q(xq, at, bg, nsym, s, invs, nqs, sxq, isq, imq, .true. ) ! TODO: provide
         q = np.array(q, dtype=np.float64, order="F")
         self.setup_sg_symmetries(verbose=False)
         full_symmetries = np.copy(self.s)
@@ -220,6 +223,7 @@ class Symmetrizer:
             order="F",
         )
 
+        self.setup_little_cogroup(q, verbose=True)
         # Returns:
         # 1. number of q-points in the star
         # 2. The vector that q is mapped to under each symmop
