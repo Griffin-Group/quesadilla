@@ -83,6 +83,7 @@ def get_nd_phonopy(path, grid, T_sc, q_comm):
         q = np.array(q)
         print(f"Applying q-star to q = {q.astype(float)}...")
         full_fcq |= symmetrizer.get_fcq_in_star(D, q)
+        print("******************************")
 
     # Create the phonon object and symmetrize the FCs
     print("Creating the Phonopy object...")
@@ -90,8 +91,8 @@ def get_nd_phonopy(path, grid, T_sc, q_comm):
     print("Fourier transforming the force constants back to real space...")
     nd_phonon.force_constants = fcq_to_fcr(full_fcq, prim, grid)
     print("Symmetrizing the force constants...")
-    # nd_phonon.symmetrize_force_constants_by_space_group()
-    # nd_phonon.symmetrize_force_constants()
+    nd_phonon.symmetrize_force_constants_by_space_group()
+    nd_phonon.symmetrize_force_constants()
 
     return nd_phonon
 

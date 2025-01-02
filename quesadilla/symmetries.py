@@ -68,11 +68,13 @@ class Symmetrizer:
         )
 
     def setup_lattice_symmetries(self, verbose: bool = False):
+        # TODO: make these input values instead of modifying module vars
         espresso_symm.symm_base.set_at_bg(self.at, self.bg)
 
         # Prepare the symmetries
         espresso_symm.symm_base.set_sym_bl()
 
+        # TODO: make these return values instead of modifying module vars
         self.s = np.copy(espresso_symm.symm_base.s)
         self.ft = np.copy(espresso_symm.symm_base.ft)
         self.nsym = espresso_symm.symm_base.nrot
@@ -89,6 +91,7 @@ class Symmetrizer:
         espresso_symm.symm_base.find_sym(self.tau, self.ityp, False, m_loc, False)
 
         # Copy into python
+        # TODO: make these return values instead of modifying module vars
         self.s = np.copy(espresso_symm.symm_base.s)
         self.ft = np.copy(espresso_symm.symm_base.ft)
         self.nsym = espresso_symm.symm_base.nsym
@@ -110,6 +113,7 @@ class Symmetrizer:
         syms = np.zeros((48), dtype=np.intc)
         syms[: self.nsym] = np.intc(1)
 
+        # TODO: make these return values instead of modifying module vars
         espresso_symm.smallg_q(xq, 0, self.at, self.nsym, self.s, syms, self.minus_q)
         # Copy the symmetries of the small group of q
         self.nsymq = espresso_symm.symm_base.copy_sym(
@@ -226,7 +230,7 @@ class Symmetrizer:
         )
         return fcq_symm
 
-    def get_fcq_in_star(self, fcq, q, verbose=False):
+    def get_fcq_in_star(self, fcq, q, verbose=True):
         """
         TODO: docstring
         """
@@ -240,30 +244,42 @@ class Symmetrizer:
         fcq = np.array(fcq, dtype=np.complex128, order="F")
         self.setup_lattice_symmetries(verbose)
         self.setup_crystal_symmetries(verbose)
-        self.setup_little_cogroup(xq, verbose)
+        self.setup_little_cogroup(np.array([0, 0, 0]), verbose)
         # -----------
         # fcq_symm = self.symmetrize_fcq(fcq, xq, verbose)
         fcq_symm = fcq
         self.rtau = espresso_symm.sgam_lr(
             self.at, self.bg, self.nsym, self.s, self.irt, self.tau
         )
+        # self.rtau *= 0 # Should work for CsCl
         # -----------
-        star_xq = self.get_star_q(xq, verbose)
+        # star_xq = self.get_star_q(xq, verbose)
+        self.nqs, self.sxq, self.isq, self.imq = espresso_symm.star_q(
+            xq,  # q point in cartesian coordinates/2pi
+            self.at,  # lattice vectors (see __init__ for format)
+            self.bg,  # rec. lattice vectors (see __init__ for format)
+            self.nsym,  # Number of symmetries in the small group of q
+            self.s,  # Array of ALL symmetries of the crystal
+            self.invs,  # Index of inverse of s in self.s
+            False,  # Verbosity flag
+        )
+        star_xq = self.sxq[:, : self.nqs].T
         # print("Got total star:", q_star)
 
         # subroutine q2qstar_ph(fcq, at, bg, nat, nsym, s, invs, irt, rtau, &
         #              nq, sxq, isq, imq, nq_tot, fcqstar)
         nq_tot = 2 * self.nqs if self.imq == 0 else self.nqs
         fcq_star = np.zeros(
-            (nq_tot, 3 * self.nat, 3 * self.nat), dtype=np.complex128, order="F"
+            (nq_tot, 3, 3, self.nat, self.nat), dtype=np.complex128, order="F"
         )
-        print("self.nsym", self.nsym)
+        # print("self.nsym", self.nsym)
         # print(self.crystal_symmetries)
         # self.setup_lattice_symmetries()
         # self.setup_crystal_symmetries()
         # self.setup_little_cogroup([0, 0, 0])
         # self.imq = 0
         # FIXME: this is broken :(
+        print(f"I have {self.nqs} q-points in the star with imq {self.imq}")
         fcq_star = espresso_symm.q2qstar_ph(
             fcq_symm,
             self.at,
@@ -279,12 +295,12 @@ class Symmetrizer:
             self.imq,
             nq_tot,
         )
+        for i, f in enumerate(fcq_star):
+            print(f"for q point {i} in the star, we have:")
+            print(f)
 
         # Get dynmat in the whole star
         final_fcq = {}
-        q = self.structure.lattice.reciprocal_lattice.get_fractional_coords(
-            xq * (2 * np.pi)
-        )
         for i, xqq in enumerate(star_xq):
             qq = np.round(
                 self.structure.lattice.reciprocal_lattice.get_fractional_coords(
@@ -302,18 +318,3 @@ class Symmetrizer:
             # final_fcq[tuple(qq)] = fcq_star[i]
 
         return final_fcq
-
-
-def transpose_blocks(D):
-    """
-    Applies a transformation matrix T to each 3x3 block of a matrix
-    D of shape (3N, 3N).
-
-    If we label the blocks by (i, j), the resulting matrix will be
-
-    D'_{ij} = T^T D_{ij} T
-    """
-    N = D.shape[0] // 3
-    D_blocks = D.reshape(N, 3, N, 3).swapaxes(1, 2)
-    D = np.array([[D_blocks[j, i] for j in range(N)] for i in range(N)])
-    return D.swapaxes(1, 2).reshape(3 * N, 3 * N)

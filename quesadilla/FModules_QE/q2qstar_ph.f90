@@ -33,7 +33,7 @@ subroutine q2qstar_ph(fcq, at, bg, nat, nsym, s, invs, irt, rtau, &
   !! symmetry op. giving the rotated q
   integer, intent(in) :: imq
   !! index of -q in the star (0 if non present)
-  double complex, intent(in) :: fcq(3 * nat, 3 * nat)
+  double complex, intent(in) :: fcq(3*nat, 3*nat)
   !! the input dynamical matrix. If \(\text{imq}\) different
   !! from 0 the output matrix is symmetrized w.r.t. time-reversal
   double precision, intent(in) :: at(3, 3)
@@ -71,22 +71,22 @@ subroutine q2qstar_ph(fcq, at, bg, nat, nsym, s, invs, irt, rtau, &
   !CALL scompact_dyn(nat, fcq, phi)
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   !phi = fcq
-  do i = 1, 3 * nat
-    na = (i - 1) / 3 + 1
-    icar = i - 3 * (na - 1)
-    do j = 1, 3 * nat
-       nb = (j - 1) / 3 + 1
-       jcar = j - 3 * (nb - 1)
-       phi (icar, jcar, na, nb) = fcq (i, j)
-       !print *, "PHI1:", icar, jcar, na,nb, phi(icar, jcar, na, nb)
-    enddo
-  enddo
+  do i = 1, 3*nat
+    na = (i - 1)/3 + 1
+    icar = i - 3*(na - 1)
+    do j = 1, 3*nat
+      nb = (j - 1)/3 + 1
+      jcar = j - 3*(nb - 1)
+      phi(icar, jcar, na, nb) = fcq(i, j)
+      !print *, "PHI1:", icar, jcar, na,nb, phi(icar, jcar, na, nb)
+    end do
+  end do
   !
   ! Go from Cartesian to Crystal coordinates
   !
   do na = 1, nat
     do nb = 1, nat
-      call trntnsc(phi(1, 1, na, nb), at, bg, -1)
+      call trntnsc(phi(:, :, na, nb), at, bg, -1)
     end do
   end do
   !

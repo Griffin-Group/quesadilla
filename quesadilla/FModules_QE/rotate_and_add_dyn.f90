@@ -122,20 +122,20 @@ subroutine symdynph_gq_new(xq, at, bg, fcq, s, invs, rtau, irt, nsymq, &
   double precision :: arg
   ! the argument of the phase
 
-  double complex :: phi(3,3,nat,nat), phip(3, 3, nat, nat), work(3, 3), fase, faseq(48)
+  double complex :: phi(3, 3, nat, nat), phip(3, 3, nat, nat), work(3, 3), fase, faseq(48)
   ! work space, phase factors
 
   !CALL scompact_dyn(nat, fcq, phi)
-  do i = 1, 3 * nat
-    na = (i - 1) / 3 + 1
-    icar = i - 3 * (na - 1)
-    do j = 1, 3 * nat
-       nb = (j - 1) / 3 + 1
-       jcar = j - 3 * (nb - 1)
-       phi (icar, jcar, na, nb) = fcq (i, j)
-       print *, "PHI1:", icar, jcar, na,nb, phi(icar, jcar, na, nb)
-    enddo
-  enddo
+  do i = 1, 3*nat
+    na = (i - 1)/3 + 1
+    icar = i - 3*(na - 1)
+    do j = 1, 3*nat
+      nb = (j - 1)/3 + 1
+      jcar = j - 3*(nb - 1)
+      phi(icar, jcar, na, nb) = fcq(i, j)
+      print *, "PHI1:", icar, jcar, na, nb, phi(icar, jcar, na, nb)
+    end do
+  end do
 
   ! Convert to cartesian coordinates
   do na = 1, nat
