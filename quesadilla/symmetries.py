@@ -89,9 +89,6 @@ class Symmetrizer:
         espresso_symm.symm_base.set_sym(
             self.at, self.bg, self.tau, self.ityp, nspin_mag, m_loc
         )
-        # espresso_symm.symm_base.find_sym(
-        #    self.at, self.bg, self.tau, self.ityp, False, m_loc, False
-        # )
 
         # Copy into python
         # TODO: make these return values instead of modifying module vars
@@ -136,6 +133,9 @@ class Symmetrizer:
         # set_giq (xq,lgamma,bg,at,s,nsymq,nsym,irotmq,minus_q,gi,gimq)
         self.irotmq, self.gi, self.gimq = espresso_symm.set_giq(
             xq, lgamma, self.bg, self.at, self.s, self.nsymq, self.nsym, self.minus_q
+        )
+        self.rtau = espresso_symm.sgam_lr(
+            self.at, self.bg, self.nsym, self.s, self.irt, self.tau
         )
         if verbose:
             q = self.structure.lattice.reciprocal_lattice.get_fractional_coords(
@@ -218,6 +218,9 @@ class Symmetrizer:
         """
         # Compute rtau = S . r_a - r_a
         fcq_symm = np.zeros((3, 3, self.nat, self.nat), dtype=np.complex128, order="F")
+        self.setup_lattice_symmetries(verbose)
+        self.setup_crystal_symmetries(verbose)
+        self.setup_little_cogroup(xq, verbose)
         fcq_symm = espresso_symm.symdynph_gq_new(
             xq,
             self.at,
@@ -231,7 +234,12 @@ class Symmetrizer:
             self.irotmq,
             self.minus_q,
         )
-        return fcq_symm
+        D_blocks = np.zeros((self.nat, self.nat, 3, 3), dtype=np.complex128)
+        # TODO: move into fortran subroutine or something
+        for na in range(self.nat):
+            for nb in range(self.nat):
+                D_blocks[na, nb] = fcq_symm[:, :, na, nb]
+        return D_blocks.swapaxes(1, 2).reshape(3 * self.nat, 3 * self.nat)
 
     def get_fcq_in_star(self, fcq, q, verbose=True):
         """
@@ -245,15 +253,16 @@ class Symmetrizer:
             order="F",
         )
         fcq = np.array(fcq, dtype=np.complex128, order="F")
+        fcq_symm = self.symmetrize_fcq(fcq, xq, verbose)
+        print(
+            f"      Mean difference between symmetrized and original fcq: {np.mean(np.abs(fcq - fcq_symm))}"
+        )
         self.setup_lattice_symmetries(verbose)
         self.setup_crystal_symmetries(verbose)
         self.setup_little_cogroup(np.array([0, 0, 0]), verbose)
         # -----------
         # fcq_symm = self.symmetrize_fcq(fcq, xq, verbose)
-        fcq_symm = fcq
-        self.rtau = espresso_symm.sgam_lr(
-            self.at, self.bg, self.nsym, self.s, self.irt, self.tau
-        )
+        # fcq_symm = fcq
         # self.rtau *= 0 # Should work for CsCl
         # -----------
         # star_xq = self.get_star_q(xq, verbose)
@@ -298,9 +307,9 @@ class Symmetrizer:
             self.imq,
             nq_tot,
         )
-        for i, f in enumerate(fcq_star):
-            print(f"for q point {i} in the star, we have:")
-            print(f)
+        # for i, f in enumerate(fcq_star):
+        #    print(f"for q point {i} in the star, we have:")
+        #    print(f)
 
         # Get dynmat in the whole star
         final_fcq = {}
