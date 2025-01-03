@@ -23,8 +23,8 @@ class Symmetrizer:
         self.structure = structure
 
         # Setup the threshold
-        self.threshold = threshold
-        espresso_symm.symm_base.set_accep_threshold(self.threshold)
+        # self.threshold = threshold
+        # espresso_symm.symm_base.set_accep_threshold(self.threshold)
 
         # Define QE Variables with fortran-ready data types
         # NOTE: we use the same names as the QE Fortran routines
@@ -68,11 +68,8 @@ class Symmetrizer:
         )
 
     def setup_lattice_symmetries(self, verbose: bool = False):
-        # TODO: make these input values instead of modifying module vars
-        espresso_symm.symm_base.set_at_bg(self.at, self.bg)
-
         # Prepare the symmetries
-        espresso_symm.symm_base.set_sym_bl()
+        espresso_symm.symm_base.set_sym_bl(self.at)
 
         # TODO: make these return values instead of modifying module vars
         self.s = np.copy(espresso_symm.symm_base.s)
@@ -86,9 +83,15 @@ class Symmetrizer:
         # TODO: implement magnetism (currently just a dummy variable)
         # TODO: some lines in symm_base need to be uncommented/checked
         m_loc = np.zeros((3, self.nat), dtype=np.float64, order="F")
+        nspin_mag = 1
 
         # Find the symmetries of the crystal
-        espresso_symm.symm_base.find_sym(self.tau, self.ityp, False, m_loc, False)
+        espresso_symm.symm_base.set_sym(
+            self.at, self.bg, self.tau, self.ityp, nspin_mag, m_loc
+        )
+        # espresso_symm.symm_base.find_sym(
+        #    self.at, self.bg, self.tau, self.ityp, False, m_loc, False
+        # )
 
         # Copy into python
         # TODO: make these return values instead of modifying module vars
