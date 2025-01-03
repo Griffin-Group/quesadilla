@@ -5,32 +5,32 @@
 ! in the root directory of the present distribution,
 ! or http://www.gnu.org/copyleft/gpl.txt .
 !
-subroutine invmat (n, a, a_inv)
+subroutine invmat(n, a, a_inv)
   !-----------------------------------------------------------------------
   ! computes the inverse "a_inv" of matrix "a", both dimensioned (n,n)
   ! matrix "a" is unchanged on output - LAPACK
   !
   implicit none
   integer :: n
-  double precision, DIMENSION (n,n), intent(in) :: a
-  double precision, dimension(n,n), intent(out) :: a_inv
+  double precision, dimension(n, n), intent(in) :: a
+  double precision, dimension(n, n), intent(out) :: a_inv
 
   !
-  integer :: info, lda, lwork, ipiv (n)
+  integer :: info, lda, lwork, ipiv(n)
   ! info=0: inversion was successful
   ! lda   : leading dimension (the same as n)
   ! ipiv  : work space for pivoting (assumed of length lwork=n)
-  double precision :: work (n) 
+  double precision :: work(n)
   ! more work space
   !
   lda = n
-  lwork=n
+  lwork = n
   !
-  a_inv(:,:) = a(:,:)
+  a_inv(:, :) = a(:, :)
   !
-  call dgetrf (n, n, a_inv, lda, ipiv, info)
+  call dgetrf(n, n, a_inv, lda, ipiv, info)
   !call errore ('invmat', 'error in DGETRF', abs (info) )
-  call dgetri (n, a_inv, lda, ipiv, work, lwork, info)
+  call dgetri(n, a_inv, lda, ipiv, work, lwork, info)
   !call errore ('invmat', 'error in DGETRI', abs (info) )
   !
   ! if (n == 3) then

@@ -6,19 +6,19 @@
 ! or http://www.gnu.org/copyleft/gpl.txt .
 !
 !----------------------------------------------------------------------------
-MODULE io_global
+module io_global
   !----------------------------------------------------------------------------
   !
-  IMPLICIT NONE
+  implicit none
   !
-  PRIVATE
-  SAVE
+  private
+  save
   !
   !PUBLIC :: io_global_start, meta_io_global_start, io_global_getionode, io_global_getmeta
-  PUBLIC :: stdout!, ionode, ionode_id, meta_ionode, meta_ionode_id
+  public :: stdout!, ionode, ionode_id, meta_ionode, meta_ionode_id
   !PUBLIC :: xmlinputunit, xmloutputunit, xmltmpunit
   !
-  INTEGER :: stdout = 6            ! unit connected to standard output
+  integer :: stdout = 6            ! unit connected to standard output
   !INTEGER :: ionode_id = 0         ! index of the i/o node
   !LOGICAL :: ionode = .TRUE.       ! identifies the i/o node
   !INTEGER :: meta_ionode_id = 0    ! index of the i/o node for meta-codes
@@ -27,7 +27,7 @@ MODULE io_global
   !INTEGER :: xmlinputunit          ! unit connected to the xml input
   !INTEGER :: xmloutputunit = 51    ! unit connected to the xml output
   !INTEGER :: xmltmpunit    = 52    ! unit connected to the temp xml output
-  !    
+  !
 !  CONTAINS
 !     !
 !     !-----------------------------------------------------------------------
@@ -105,8 +105,8 @@ MODULE io_global
 !       RETURN
 !       !
 !     END SUBROUTINE io_global_getionode
-!     !  
-!     !  
+!     !
+!     !
 !     !-----------------------------------------------------------------------
 !     SUBROUTINE io_global_getmeta( myrank, root )
 !       !-----------------------------------------------------------------------
@@ -125,7 +125,7 @@ MODULE io_global
 !       ELSE
 !         meta_ionode = .false.
 !       !
-!       ENDIF 
+!       ENDIF
 !       !
 !       meta_ionode_id = root
 !       !
@@ -134,4 +134,4 @@ MODULE io_global
 !     END SUBROUTINE io_global_getmeta
 !     !
 !     !
-END MODULE io_global
+end module io_global

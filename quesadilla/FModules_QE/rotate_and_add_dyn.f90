@@ -84,7 +84,7 @@ subroutine symdynph_gq_new(xq, at, bg, fcq, s, invs, rtau, irt, nsymq, &
   !! symmetry of the crystal). For more information please see:
   !! Phys. Rev. B 100, 045115 (2019).
   !
-  USE symm_base, ONLY: t_rev
+  use symm_base, only: t_rev
   !
   implicit none
   !
@@ -133,7 +133,7 @@ subroutine symdynph_gq_new(xq, at, bg, fcq, s, invs, rtau, irt, nsymq, &
       nb = (j - 1)/3 + 1
       jcar = j - 3*(nb - 1)
       phi(icar, jcar, na, nb) = fcq(i, j)
-      print *, "PHI1:", icar, jcar, na, nb, phi(icar, jcar, na, nb)
+      ! print *, "PHI1:", icar, jcar, na, nb, phi(icar, jcar, na, nb)
     end do
   end do
 
@@ -152,8 +152,8 @@ subroutine symdynph_gq_new(xq, at, bg, fcq, s, invs, rtau, irt, nsymq, &
       do ipol = 1, 3
         do jpol = 1, 3
           phi(ipol, jpol, na, nb) = 0.5d0*(phi(ipol, jpol, na, nb) &
-                                           + CONJG(phi(jpol, ipol, nb, na)))
-          phi(jpol, ipol, nb, na) = CONJG(phi(ipol, jpol, na, nb))
+                                           + conjg(phi(jpol, ipol, nb, na)))
+          phi(jpol, ipol, nb, na) = conjg(phi(ipol, jpol, na, nb))
         end do
       end do
     end do
@@ -179,7 +179,7 @@ subroutine symdynph_gq_new(xq, at, bg, fcq, s, invs, rtau, irt, nsymq, &
                                      rtau(kpol, irotmq, nb)))
             end do
             arg = arg*tpi
-            fase = CMPLX(cos(arg), sin(arg), kind(1.0D0))
+            fase = cmplx(cos(arg), sin(arg), kind(1.0d0))
             do kpol = 1, 3
               do lpol = 1, 3
                 work(ipol, jpol) = work(ipol, jpol) + &
@@ -188,7 +188,7 @@ subroutine symdynph_gq_new(xq, at, bg, fcq, s, invs, rtau, irt, nsymq, &
               end do
             end do
             phip(ipol, jpol, na, nb) = (phi(ipol, jpol, na, nb) + &
-                                        CONJG(work(ipol, jpol)))*0.5d0
+                                        conjg(work(ipol, jpol)))*0.5d0
           end do
         end do
       end do
@@ -216,20 +216,20 @@ subroutine symdynph_gq_new(xq, at, bg, fcq, s, invs, rtau, irt, nsymq, &
                                    rtau(ipol, irot, nb)))
           end do
           arg = arg*tpi
-          faseq(isymq) = CMPLX(cos(arg), sin(arg), kind(1.0D0))
+          faseq(isymq) = cmplx(cos(arg), sin(arg), kind(1.0d0))
           do ipol = 1, 3
             do jpol = 1, 3
               do kpol = 1, 3
                 do lpol = 1, 3
-                  IF (t_rev(isymq) == 1) THEN
+                  if (t_rev(isymq) == 1) then
                     work(ipol, jpol) = work(ipol, jpol) + &
                                        s(ipol, kpol, irot)*s(jpol, lpol, irot) &
-                                       *CONJG(phi(kpol, lpol, sna, snb)*faseq(isymq))
-                  ELSE
+                                       *conjg(phi(kpol, lpol, sna, snb)*faseq(isymq))
+                  else
                     work(ipol, jpol) = work(ipol, jpol) + &
                                        s(ipol, kpol, irot)*s(jpol, lpol, irot) &
                                        *phi(kpol, lpol, sna, snb)*faseq(isymq)
-                  END IF
+                  end if
                 end do
               end do
             end do
@@ -244,15 +244,15 @@ subroutine symdynph_gq_new(xq, at, bg, fcq, s, invs, rtau, irt, nsymq, &
               phi(ipol, jpol, sna, snb) = (0.d0, 0.d0)
               do kpol = 1, 3
                 do lpol = 1, 3
-                  IF (t_rev(isymq) == 1) THEN
+                  if (t_rev(isymq) == 1) then
                     phi(ipol, jpol, sna, snb) = phi(ipol, jpol, sna, snb) &
                                                 + s(ipol, kpol, invs(irot))*s(jpol, lpol, invs(irot)) &
-                                                *CONJG(work(kpol, lpol)*faseq(isymq))
-                  ELSE
+                                                *conjg(work(kpol, lpol)*faseq(isymq))
+                  else
                     phi(ipol, jpol, sna, snb) = phi(ipol, jpol, sna, snb) &
                                                 + s(ipol, kpol, invs(irot))*s(jpol, lpol, invs(irot)) &
-                                                *work(kpol, lpol)*CONJG(faseq(isymq))
-                  END IF
+                                                *work(kpol, lpol)*conjg(faseq(isymq))
+                  end if
                 end do
               end do
             end do
@@ -262,7 +262,7 @@ subroutine symdynph_gq_new(xq, at, bg, fcq, s, invs, rtau, irt, nsymq, &
       end if
     end do
   end do
-  phi(:, :, :, :) = phi(:, :, :, :)/DBLE(nsymq)
+  phi(:, :, :, :) = phi(:, :, :, :)/dble(nsymq)
 
   ! Convert back to fractional coordinates
   do na = 1, nat

@@ -7,10 +7,10 @@
 ! or http://www.gnu.org/copyleft/gpl.txt .
 !
 !----------------------------------------------------------------------------
-SUBROUTINE errore( calling_routine, message, ierr )
+subroutine errore(calling_routine, message, ierr)
   !----------------------------------------------------------------------------
   !
-  ! ... This is a simple routine which writes an error message to output: 
+  ! ... This is a simple routine which writes an error message to output:
   ! ... if ierr <= 0 it does nothing,
   ! ... if ierr  > 0 it stops.
   !
@@ -26,31 +26,31 @@ SUBROUTINE errore( calling_routine, message, ierr )
 !  USE ifcore,    ONLY : tracebackqq
 !#endif
   !USE mp,        ONLY : mp_abort, mp_rank
-  IMPLICIT NONE
+  implicit none
   !
-  CHARACTER(LEN=*), INTENT(IN) :: calling_routine, message
-    ! the name of the calling calling_routine
-    ! the output message
-  INTEGER,          INTENT(IN) :: ierr
-    ! the error flag
-  INTEGER :: crashunit, mpime
-  INTEGER, EXTERNAL :: find_free_unit
-  CHARACTER(LEN=6) :: cerr
+  character(LEN=*), intent(IN) :: calling_routine, message
+  ! the name of the calling calling_routine
+  ! the output message
+  integer, intent(IN) :: ierr
+  ! the error flag
+  integer :: crashunit, mpime
+  integer, external :: find_free_unit
+  character(LEN=6) :: cerr
   !
-  IF( ierr <= 0 ) RETURN
+  if (ierr <= 0) return
   !
   ! ... the error message is written on the "*" unit
   !
-  WRITE( cerr, FMT = '(I6)' ) ierr
-  WRITE( UNIT = *, FMT = '(/,1X,78("%"))' )
-  WRITE( UNIT = *, FMT = '(5X,"Error in routine ",A," (",A,"):")' ) &
-        TRIM(calling_routine), TRIM(ADJUSTL(cerr))
-  WRITE( UNIT = *, FMT = '(5X,A)' ) TRIM(message)
-  WRITE( UNIT = *, FMT = '(1X,78("%"),/)' )
+  write (cerr, FMT='(I6)') ierr
+  write (UNIT=*, FMT='(/,1X,78("%"))')
+  write (UNIT=*, FMT='(5X,"Error in routine ",A," (",A,"):")') &
+    trim(calling_routine), trim(adjustl(cerr))
+  write (UNIT=*, FMT='(5X,A)') trim(message)
+  write (UNIT=*, FMT='(1X,78("%"),/)')
   !
-  WRITE( *, '("     stopping ...")' )
+  write (*, '("     stopping ...")')
   !
-  FLUSH( 6 )
+  flush (6)
   !
 !#if defined(__PTRACE)
 !#if defined(__INTEL_COMPILER)
@@ -91,14 +91,14 @@ SUBROUTINE errore( calling_routine, message, ierr )
 !  !
 !#endif
   !
-  STOP 1
+  stop 1
   !
-  RETURN
+  return
   !
-END SUBROUTINE errore
+end subroutine errore
 !
 !----------------------------------------------------------------------
-SUBROUTINE infomsg( routine, message )
+subroutine infomsg(routine, message)
   !----------------------------------------------------------------------
   !
   ! ... This is a simple routine which writes an info message
@@ -106,22 +106,22 @@ SUBROUTINE infomsg( routine, message )
   !
   !USE util_param
   !
-  IMPLICIT NONE
+  implicit none
   !
-  CHARACTER (LEN=*) :: routine, message
+  character(LEN=*) :: routine, message
   ! the name of the calling routine
   ! the output message
   !
 !  IF ( ionode ) THEN   !if not ionode it is redirected to /dev/null anyway
-     !
-     WRITE( * , '(5X,"Message from routine ",A,":")' ) routine
-     WRITE( * , '(5X,A)' ) message
-     !
+  !
+  write (*, '(5X,"Message from routine ",A,":")') routine
+  write (*, '(5X,A)') message
+  !
 !  END IF
   !
-  RETURN
+  return
   !
-END SUBROUTINE infomsg
+end subroutine infomsg
 !
 !module error_handler
 !  implicit none
@@ -246,57 +246,57 @@ END SUBROUTINE infomsg
 ! in the root directory of the present distribution,
 ! or http://www.gnu.org/copyleft/gpl.txt .
 !
-  !-----------------------------------------------------------------------
-FUNCTION int_to_char( i )
+!-----------------------------------------------------------------------
+function int_to_char(i)
   !-----------------------------------------------------------------------
   !! Converts an integer number of up to 6 figures into a left-justifed
   !! character variable.
   !
-  IMPLICIT NONE
+  implicit none
   !
-  INTEGER, INTENT(IN) :: i
-  CHARACTER (LEN=6)   :: int_to_char
-  CHARACTER :: c
-  INTEGER   :: n, j, nc
-  LOGICAL   :: neg
-  !   
+  integer, intent(IN) :: i
+  character(LEN=6)   :: int_to_char
+  character :: c
+  integer   :: n, j, nc
+  logical   :: neg
+  !
   nc = 6
   !
-  IF( i < 0 ) then
-     nc  = nc - 1
-     n   = -i
-     neg = .true.
-  ELSE
-     n   = i
-     neg = .false.
-  END IF
+  if (i < 0) then
+    nc = nc - 1
+    n = -i
+    neg = .true.
+  else
+    n = i
+    neg = .false.
+  end if
   !
   j = 1
-  DO WHILE( j <= nc ) 
-     int_to_char(j:j) = CHAR( MOD( n, 10 ) + ICHAR( '0' ) )
-     n = n / 10
-     IF( n == 0 ) EXIT
-     j = j + 1
-  END DO
+  do while (j <= nc)
+    int_to_char(j:j) = char(mod(n, 10) + ichar('0'))
+    n = n/10
+    if (n == 0) exit
+    j = j + 1
+  end do
   !
-  IF( j <= nc ) THEN
-     DO n = 1, j/2
-        c = int_to_char( n : n )
-        int_to_char( n : n ) = int_to_char( j-n+1 : j-n+1 )
-        int_to_char( j-n+1 : j-n+1 ) = c
-     END DO
-     IF( j < nc ) int_to_char(j+1:nc) = ' '
-  ELSE
-     int_to_char(:) = '*'
-  END IF
+  if (j <= nc) then
+    do n = 1, j/2
+      c = int_to_char(n:n)
+      int_to_char(n:n) = int_to_char(j - n + 1:j - n + 1)
+      int_to_char(j - n + 1:j - n + 1) = c
+    end do
+    if (j < nc) int_to_char(j + 1:nc) = ' '
+  else
+    int_to_char(:) = '*'
+  end if
   !
-  IF( neg ) THEN
-     DO n = nc+1, 2, -1
-        int_to_char(n:n) = int_to_char(n-1:n-1)
-     END DO
-     int_to_char(1:1) = '-'
-  END IF
+  if (neg) then
+    do n = nc + 1, 2, -1
+      int_to_char(n:n) = int_to_char(n - 1:n - 1)
+    end do
+    int_to_char(1:1) = '-'
+  end if
   !
-  RETURN
+  return
   !
-END FUNCTION int_to_char
+end function int_to_char

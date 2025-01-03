@@ -106,7 +106,7 @@ subroutine q2qstar_ph(fcq, at, bg, nat, nsym, s, invs, irt, rtau, &
         do i = 1, 3
           do j = 1, 3
             phi(i, j, na, nb) = 0.5d0*(phi(i, j, na, nb) + &
-                                       CONJG(phi2(i, j, na, nb)))
+                                       conjg(phi2(i, j, na, nb)))
           end do
         end do
       end do
@@ -138,7 +138,7 @@ subroutine q2qstar_ph(fcq, at, bg, nat, nsym, s, invs, irt, rtau, &
                                 rtau, sxq(1, iq))
       end if
     end do
-    phi2(:, :, :, :) = phi2(:, :, :, :)/DBLE(nsq)
+    phi2(:, :, :, :) = phi2(:, :, :, :)/dble(nsq)
     !
     ! Back to cartesian coordinates
     !
@@ -160,7 +160,7 @@ subroutine q2qstar_ph(fcq, at, bg, nat, nsym, s, invs, irt, rtau, &
         do nb = 1, nat
           do i = 1, 3
             do j = 1, 3
-              phi2(i, j, na, nb) = CONJG(phi2(i, j, na, nb))
+              phi2(i, j, na, nb) = conjg(phi2(i, j, na, nb))
             end do
           end do
         end do

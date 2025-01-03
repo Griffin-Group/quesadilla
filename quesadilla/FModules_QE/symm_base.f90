@@ -354,9 +354,9 @@ contains
       ! ... This happens for instance for an hexagonal lattice with one axis
       ! oriented at 15 degrees from the x axis, the other along (-1,1,0)
       ! --> TEMPORARILY COMMENTED OUT BY OMAR
-      CALL infomsg( 'set_sym_bl', 'NOTICE: Symmetry group for Bravais lattice &
-                   &is not a group (' // TRIM(int_to_char(nrot)) // &
-                    ') - symmetries are disabled' )
+      call infomsg('set_sym_bl', 'NOTICE: Symmetry group for Bravais lattice &
+                   &is not a group ('//trim(int_to_char(nrot))// &
+                    ') - symmetries are disabled')
       nrot = 1
     end if
     !
