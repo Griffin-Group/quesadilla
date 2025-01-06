@@ -1,5 +1,4 @@
 import math
-from copy import deepcopy
 from fractions import Fraction
 from typing import Tuple
 
@@ -9,7 +8,6 @@ from numpy.typing import ArrayLike
 from phonopy.structure.atoms import PhonopyAtoms
 from phonopy.structure.cells import Primitive, Supercell
 from pymatgen.core.structure import Structure
-from pymatgen.io.vasp.inputs import Kpoints
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
 
@@ -38,10 +36,12 @@ def struct_to_phonopy(prim: Structure, grid: ArrayLike) -> Tuple[Supercell, Prim
     return primitive, supercell
 
 
-# Copied from QEPlayground
 def find_integers(nums, g23, g12, g31, g123):
-    """Compute integers for off-diagonal supercell matrix elements
+    """
+    Compute integers for off-diagonal supercell matrix elements
     Called by find_nondiagonal()
+
+    This function is copied from QEPlayground
     """
     # Compute p (it's a modulo equation)
     if g23 == 1:
@@ -77,9 +77,13 @@ def find_integers(nums, g23, g12, g31, g123):
     return p, q, r
 
 
-# Copied from QEPlayground
 def find_nondiagonal(Q):
-    """Nondiagonal supercell, based on [Phys. Rev. B 92, 184301]"""
+    """
+    Nondiagonal supercell, based on [Phys. Rev. B 92, 184301]
+    This function is copied from QEPlayground
+
+    Parameters:
+    """
     # Take care of components already at Gamma
     Q[1, np.where(Q[0] == 0)] = 1
     # Shift the q-point into the positive quadrant of the reciprocal unit cell
@@ -113,13 +117,78 @@ def convert_to_fraction_array(arr):
     return result
 
 
-def get_qpoints(s, grid, shift=(0, 0, 0), ibz=True):
-    sga = SpacegroupAnalyzer(s)
+def get_qpoints(
+    structure: Structure,
+    grid: ArrayLike,
+    ibz: bool = True,
+):
+    """
+    Get the necessary q points for a given structure and grid.
+
+    Parameters:
+    - structure: pymatgen.Structure
+        The input structure (primitive cell).
+    - grid: array-like
+        The grid of q points (e.g., [4, 4, 4] for a 4x4x4 grid).
+    - ibz: bool
+        Whether to return the irreducible q points. Always use True.
+
+    Returns:
+    - qpoints: numpy.ndarray
+        The q points in the IBZ (fractional coordinates).
+    """
+    sga = SpacegroupAnalyzer(structure)
     if ibz:
-        qpoints = np.array([q[0] for q in sga.get_ir_reciprocal_mesh(grid, shift)])
+        qpoints = np.array([q[0] for q in sga.get_ir_reciprocal_mesh(grid)])
     else:
-        qpoints, _ = sga.get_ir_reciprocal_mesh_map(grid, shift)
-    return qpoints[~np.all(qpoints == [0, 0, 0], axis=1)]
+        qpoints, _ = sga.get_ir_reciprocal_mesh_map(grid)
+    return qpoints
+
+
+def get_T_matrices(qpoints):
+    qpoints_frac = convert_to_fraction_array(qpoints)
+    T_matrices = np.zeros((qpoints.shape[0], 3, 3), dtype=int)
+
+    # pymatgen uses different convention, need transpose
+    for i, Q in enumerate(qpoints_frac):
+        T_matrices[i, :] = find_nondiagonal(Q)
+
+    return T_matrices
+
+
+def get_supercells(
+    prim: Structure, grid: ArrayLike, reduce: bool = True, trim: bool = False
+):
+    """
+    Generate nondiagonal supercells commensurate with the IBZ.
+
+    Parameters:
+    - prim: pymatgen.Structure
+        The input structure (primitive cell).
+    - grid: array-like
+        The grid of q points (e.g., [4, 4, 4] for a 4x4x4 grid).
+    - reduce: bool
+        Whether to Minkowski reduce the supercells (default: True, recommended).
+    - trim: bool
+        Whether to trim the supercells using ILP (default: False, broken).
+
+    Returns:
+    - T_mat: list of numpy.ndarray
+        The transformation matrices.
+    - q_comm: list of numpy.ndarray
+        q_comm[i] is the q-vector (frac coords) commensurate with T_mat[i]
+    """
+
+    q_comm = get_qpoints(prim, grid)
+    T_matrices = get_T_matrices(q_comm)
+    # sc_sizes = np.array([np.linalg.det(T) for T in T_matrices])
+    for i, T in enumerate(T_matrices):
+        temp_latt_vecs = np.dot(T, prim.lattice.matrix)
+        temp_latt_vecs = minkowski_reduce(temp_latt_vecs)
+        T = np.dot(temp_latt_vecs, prim.lattice.reciprocal_lattice.matrix.T / 2 / np.pi)
+        T_matrices[i] = ensure_positive_det(np.rint(T).astype(int))
+
+    return np.array(T_matrices), np.array(q_comm)
 
 
 def pick_smallest_supercells(commensurate, sc_sizes, verbose=False):
@@ -179,99 +248,9 @@ def pick_smallest_supercells(commensurate, sc_sizes, verbose=False):
     return selected_cells
 
 
-def get_T_matrices(qpoints):
-    qpoints_frac = convert_to_fraction_array(qpoints)
-    T_matrices = np.zeros((qpoints.shape[0], 3, 3), dtype=int)
-
-    # pymatgen uses different convention, need transpose
-    for i, Q in enumerate(qpoints_frac):
-        T_matrices[i, :] = find_nondiagonal(Q)
-
-    # Eliminate identity if it's there
-    # mask = ~np.all(T_matrices == np.eye(3), axis=(1,2))
-    return T_matrices
-
-
 # FIXME: How to do Niggli reduction without messing up
 # the commensurate q-points? Here, the niggli-reduced cells
 # actually no longer span the full IBZ...?
-def get_supercells(prim, grid, shift=(0, 0, 0), reduce=True, ibz=True, trim=True):
-    qpoints = get_qpoints(prim, grid, shift, ibz)
-    T_matrices = get_T_matrices(qpoints)
-    nq = qpoints.shape[0]
-    commensurate = np.full((nq, nq), False, dtype=bool)
-    for i, T in enumerate(T_matrices):
-        commensurate[i, :] = [np.all(q @ T.T == np.round(q @ T.T)) for q in qpoints]
-    sc_sizes = np.array([np.linalg.det(T) for T in T_matrices])
-
-    # Trim to find the smallest number of supercells that span
-    # the entire IBZ while minimizing the total supercell size
-    if trim:
-        selected_cells = pick_smallest_supercells(commensurate, sc_sizes)
-    else:
-        selected_cells = np.arange(len(sc_sizes))
-    print(
-        (
-            f"Need {len(selected_cells)} supercells "
-            f"with sizes {sc_sizes[selected_cells]}"
-        )
-    )
-    supercells = []
-    T_new = []
-    for T in T_matrices[selected_cells]:
-        sc = deepcopy(prim)
-        sc.make_supercell(T.T)
-        if reduce:
-            sc_reduced = sc.get_reduced_structure(reduction_algo="niggli")
-        else:
-            sc_reduced = sc
-        supercells.append(sc_reduced)
-
-        # New transformation matrix
-        S = prim.lattice.matrix.T
-        D = sc_reduced.lattice.matrix.T
-        T_new.append(np.round(np.matmul(np.linalg.inv(S), D), 10))
-
-    # Get commensurate q points for the selected supercells
-    q_comm = [qpoints[c] for c in commensurate[selected_cells, :]]
-    return supercells, T_new, q_comm, T_matrices[selected_cells]
-
-
-def minkowski_reduce(matrix):
-    """
-    TODO: implement this function
-    """
-    pass
-
-
-def get_KPOINTS(struct, kspace):
-    """
-    TODO: switch to autoGR
-    Prepares a KPOINTS object with a mesh of given spacing in 1/Å.
-    Parameters:
-    -----------
-    struct : pymatgen.Structure
-        The structure object.
-    kspace : float
-        The spacing of the k-point mesh in 1/Å.
-    Returns:
-    --------
-    kpoints : pymatgen.io.vasp.inputs.Kpoints
-        The KPOINTS object.
-    """
-    assert kspace > 0, "argument kspace must not be negative"
-    b = np.array(struct.lattice.reciprocal_lattice.matrix)
-    N = np.maximum(
-        np.array([1, 1, 1]), np.round(np.sqrt(np.sum(b**2, axis=1)) / kspace)
-    ).astype(np.int64)
-    k_dict = {
-        "nkpoints": 0,
-        "generation_style": "Gamma",
-        "kpoints": [[N[0], N[1], N[2]]],
-        "usershift": [0, 0, 0],
-        "comment": f"Mesh with spacing {kspace} 1/Å",
-    }
-    return Kpoints.from_dict(k_dict)
 
 
 def ensure_positive_det(matrix):
@@ -295,3 +274,115 @@ def ensure_positive_det(matrix):
         matrix[row_to_flip] *= -1
 
     return matrix
+
+
+# TODO: these two functions are written very similarly to
+# the FORTRAN code so it's they're very difficult to understand.
+# Needs a complete rewrite in a pythonic and understandable way.
+def minkowski_reduce(vecs):
+    """
+    Given a set of 3 vectors in 3D space (rows of `vecs`) that might not be
+    Minkowski-reduced, iteratively attempt to Minkowski-reduce them until no
+    further changes occur.
+
+    Minkowski reduction (in 3D) implies:
+      - The first vector is the shortest non-zero vector in the lattice.
+      - Each subsequent vector is the shortest possible that still ensures
+        linear independence with previously chosen vectors.
+
+    This function modifies `vecs` in place until it is Minkowski-reduced.
+
+    Parameters
+    ----------
+    vecs : np.ndarray of shape (3, 3)
+        Each row is a 3D vector. This array is modified in place during the
+        iterative process.
+
+    Returns
+    -------
+    np.ndarray
+        The Minkowski-reduced vectors (same reference as `vecs`).
+    """
+    # Sanity check
+    if vecs.shape != (3, 3):
+        raise ValueError("Input array 'vecs' must have shape (3, 3).")
+
+    # We'll keep iterating until no more changes happen
+    while True:
+        # Save a copy of the current vectors so we can restore each row after testing
+        vecs_snapshot = vecs.copy()
+
+        # 1) Check linear combinations involving two vectors
+        #    We do this by zeroing out each row in turn, calling reduce_vec, then restoring.
+        changed_in_this_pass = False
+        for i in range(3):
+            saved_row = vecs[i].copy()  # backup
+            vecs[i] = 0.0  # zero out
+            changed = reduce_vec(vecs)  # see if a reduction is triggered
+            vecs[i] = saved_row  # restore the row
+
+            if changed:
+                changed_in_this_pass = True
+                break  # break out of this for-loop to restart the outer loop
+
+        if changed_in_this_pass:
+            continue  # restart from scratch
+
+        # 2) Check linear combinations involving all three vectors directly
+        changed = reduce_vec(vecs)
+        if changed:
+            continue  # if it changed, restart
+
+        # 3) If we got here, no changes occurred in either step -> done
+        break
+
+    return vecs
+
+
+def reduce_vec(vecs, tol=1e-7):
+    """
+    Attempt to reduce three 3D vectors (rows of vecs) by checking specific
+    linear combinations. If any combination is shorter than the current longest
+    vector, replace that longest vector with the shorter one.
+
+    Parameters
+    ----------
+    vecs : np.ndarray of shape (3, 3)
+        Each row is a 3D vector: [v1, v2, v3].
+        This array is modified in place if a reduction occurs.
+    tol : float, optional
+        Relative tolerance for floating-point comparisons.
+
+    Returns
+    -------
+    bool
+        True if a replacement (and thus a reduction) happened.
+        False otherwise.
+    """
+    # Compute the squared lengths of each of the three rows (vectors)
+    lengths_sq = np.sum(vecs**2, axis=1)
+    # Identify the index of the longest vector
+    longest_idx = np.argmax(lengths_sq)
+    max_len_sq = lengths_sq[longest_idx]
+
+    # Construct the 4 new candidate vectors
+    # Using Python’s array slicing to keep it readable:
+    a, b, c = vecs
+    new_vectors = np.array(
+        [
+            a + b - c,
+            a - b + c,
+            -a + b + c,
+            a + b + c,
+        ]
+    )
+
+    # Check whether any candidate is strictly shorter (within tolerance)
+    for new_v in new_vectors:
+        new_len_sq = np.dot(new_v, new_v)
+        # Compare with a relative tolerance
+        if new_len_sq < max_len_sq - tol * max_len_sq:
+            # Replace the longest vector with the new shorter one
+            vecs[longest_idx] = new_v
+            return True
+    return False

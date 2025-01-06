@@ -13,62 +13,6 @@ import quesadilla.symmetries as symmetries
 from quesadilla.supercells import struct_to_phonopy
 
 
-def ensure_positive_det(matrix):
-    """
-    If the matrix has a negative determinant, this function flips the sign of the row with the most negative entries. Phonopy requires the supercell matrix to have a positive determinant.
-
-    Args:
-        matrix (numpy.ndarray): Input square matrix.
-
-    Returns:
-        numpy.ndarray: Adjusted matrix.
-    """
-    if np.linalg.det(matrix) < 0:
-        # Calculate the sum of negative entries in each row
-        negative_sums = np.sum(np.minimum(matrix, 0), axis=1)
-
-        # Find the row index with the most negative entries
-        row_to_flip = np.argmin(negative_sums)
-
-        # Flip the sign of the selected row
-        matrix[row_to_flip] *= -1
-
-    return matrix
-
-
-def read_monserrat(path):
-    """
-    Reads kpoint_to_supercell.dat and associated supercell files.
-
-    Args:
-        path (str): Path to the directory containing kpoint_to_supercell.dat and supercell.<i>.dat files.
-
-    Returns:
-        tuple: A NumPy array of vectors (n x 3) and a list of associated matrices (each 3 x 3).
-    """
-    # File paths
-    kpoint_file = os.path.join(path, "kpoint_to_supercell.dat")
-
-    # Read kpoint_to_supercell.dat using NumPy
-    kpoint_data = np.loadtxt(kpoint_file)
-
-    # Extract vectors (first 3 columns) and indices (last column)
-    q = kpoint_data[:, :3]
-    indices = kpoint_data[:, 3].astype(int)
-
-    # Read the associated supercell matrices
-    matrices = []
-    for i in indices:
-        supercell_file = os.path.join(path, f"supercell.{i}.dat")
-        T = np.loadtxt(supercell_file, dtype=int)  # Read the 3x3 matrix
-        matrices.append(ensure_positive_det(T))
-        # for qq in q:
-        qq = q[i - 1]
-        assert np.allclose(
-            T @ qq, np.round(T @ qq)
-        ), "Supercell {i} is not commensurate with q = {qq}"
-
-    return matrices, q
 
 
 def get_nd_phonopy(path, grid, T_sc, q_comm):
