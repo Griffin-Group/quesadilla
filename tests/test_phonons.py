@@ -4,7 +4,8 @@ import numpy as np
 import phonopy
 import pytest
 
-import quesadilla.dynmat as dynmat
+from quesadilla.dynmat import get_nd_phonopy
+from quesadilla.utils import read_monserrat
 
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -21,8 +22,8 @@ def test_phonon_band_comparison(material, threshold):
     # Load structures and phonon data
     root = f"{TEST_DIR}/data/{material}/"
     # prim = Structure.from_file(f"{root}/POSCAR")
-    T_sc, q_comm = dynmat.read_monserrat(f"{root}/monserrat")
-    nd_phonon = dynmat.get_nd_phonopy(f"{root}", [4, 4, 4], T_sc, q_comm)
+    T_sc, q_comm = read_monserrat(f"{root}/monserrat")
+    nd_phonon = get_nd_phonopy(f"{root}", [4, 4, 4], T_sc, q_comm)
     ref_phonon = phonopy.load(f"{root}/phonopy-diag.yaml")
 
     # Generate band structures

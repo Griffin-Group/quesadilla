@@ -38,7 +38,8 @@ f2py_root = meson.current_build_dir() / 'f2py'
 py.install_sources(['quesadilla/__init__.py',
                     'quesadilla/dynmat.py', 
                     'quesadilla/symmetries.py', 
-                    'quesadilla/supercells.py'],
+                    'quesadilla/supercells.py',
+                    'quesadilla/utils.py'],
                     subdir : 'quesadilla')
 
 # Install fortran module
