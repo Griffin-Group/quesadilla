@@ -225,7 +225,6 @@ subroutine set_giq(xq, lgamma, bg, at, s, nsymq, nsym, irotmq, minus_q, gi, gimq
   return
 end subroutine set_giq
 
-
 !-----------------------------------------------------------------------
 subroutine sgam_lr(at, bg, nsym, s, irt, tau, rtau, nat)
   !-----------------------------------------------------------------------

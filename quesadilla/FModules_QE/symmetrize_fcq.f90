@@ -18,7 +18,7 @@ subroutine symdynph_gq_new(xq, at, bg, fcq, s, invs, rtau, irt, nsymq, &
   !! that require the time reversal operator (meaning that TS is a
   !! symmetry of the crystal). For more information please see:
   !! Phys. Rev. B 100, 045115 (2019).
-  !! OAA: the version of the routine included with Quesadilla uses 
+  !! OAA: the version of the routine included with Quesadilla uses
   !! crystal axes, unlike the version in the main QE code
   !
   use symm_base, only: t_rev
@@ -205,7 +205,6 @@ subroutine symdynph_gq_new(xq, at, bg, fcq, s, invs, rtau, irt, nsymq, &
 
   return
 end subroutine symdynph_gq_new
-
 
 !-----------------------------------------------------------------------
 subroutine q2qstar_ph(fcq, at, bg, nat, nsym, s, invs, irt, rtau, &

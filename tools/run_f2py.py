@@ -23,7 +23,7 @@ def main():
         "quesadilla/FModules_QE/eqvect.f90",
         "quesadilla/FModules_QE/invmat.f90",
         "quesadilla/FModules_QE/little_group.f90",
-        "quesadilla/FModules_QE/error_handler.f90",
+        "quesadilla/FModules_QE/io.f90",
     ]
 
     # Prepare the command line arguments for f2py
