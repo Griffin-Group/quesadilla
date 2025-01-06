@@ -12,7 +12,7 @@ subroutine star_q(xq, at, bg, nsym, s, invs, nq, sxq, isq, imq, verbosity)
   ! NB: input s(:,:,1:nsym) must contain all crystal symmetries,
   ! i.e. not those of the small-qroup of q only
   !
-  use io_global, only: stdout
+  !use io_global, only: stdout
   implicit none
   !
   integer, intent(in) :: nsym, s(3, 3, 48), invs(48)
@@ -106,14 +106,14 @@ subroutine star_q(xq, at, bg, nsym, s, invs, nq, sxq, isq, imq, verbosity)
   ! writes star of q
   !
   if (verbosity) then
-    write (stdout, *)
-    write (stdout, '(5x,a,i4)') 'Number of q in the star = ', nq
-    write (stdout, '(5x,a)') 'List of q in the star:'
-    write (stdout, '(7x,i4,3f14.9)') (iq, (sxq(i, iq), i=1, 3), iq=1, nq)
+    write (*, *)
+    write (*, '(5x,a,i4)') 'Number of q in the star = ', nq
+    write (*, '(5x,a)') 'List of q in the star:'
+    write (*, '(7x,i4,3f14.9)') (iq, (sxq(i, iq), i=1, 3), iq=1, nq)
     call flush ()
     if (imq == 0) then
-      write (stdout, '(5x,a)') 'In addition there is the -q list: '
-      write (stdout, '(7x,i4,3f14.9)') (iq, (-sxq(i, iq), i=1, 3), iq=1, nq)
+      write (*, '(5x,a)') 'In addition there is the -q list: '
+      write (*, '(7x,i4,3f14.9)') (iq, (-sxq(i, iq), i=1, 3), iq=1, nq)
       call flush ()
     end if
   end if

@@ -200,7 +200,7 @@ class Symmetrizer:
         self.rtau = espresso_symm.sgam_lr(
             self.at, self.bg, self.nsym, self.s, self.irt, self.tau
         )
-        
+
         # Print some info
         if verbose:
             q = self.structure.lattice.reciprocal_lattice.get_fractional_coords(
@@ -222,6 +222,16 @@ class Symmetrizer:
         # sourcery skip: extract-method
         """
         Get the star of a q-point.
+
+        Parameters:
+            - xq : ndarray(3), q point in CARTESIAN coordinates / (2 * pi)
+            - verbose : bool
+                Whether to print the number of q-points in the star and the list of q-points in the star.
+            - debug : bool
+                Whether to print debug information from Fortran routines.
+
+        Returns:
+            ndarray(nq, 3), the q-points in the star in CARTESIAN coordinates / (2 * pi)
         """
         # To get the star we need the symmetries of the WHOLE CRYSTAL
         # So that's just the litle group of the Gamma point
@@ -271,10 +281,10 @@ class Symmetrizer:
                 The q vector, in CARTESIAN coordinates / (2 * pi)
 
         Returns:
-            ndarray(3, 3, nat, nat): The symmetrized force constants at q.
+            ndarray(3 * nat, 3* nat): The symmetrized force constants at q in FRACTIONAL coordinates.
         """
         self._setup_little_group(xq, verbose)
-        fcq_symm = espresso_symm.symdynph_gq_new(
+        return espresso_symm.symdynph_gq_new(
             xq,
             self.at,
             self.bg,
@@ -287,17 +297,6 @@ class Symmetrizer:
             self.irotmq,
             self.minus_q,
         )
-        blocks = np.zeros((self.nat, self.nat, 3, 3), dtype=np.complex128)
-        # TODO: move into fortran subroutine or something
-        for na in range(self.nat):
-            for nb in range(self.nat):
-                blocks[na, nb] = fcq_symm[:, :, na, nb]
-        fcq_symm = blocks.swapaxes(1, 2).reshape(3 * self.nat, 3 * self.nat)
-        if verbose:
-            print(
-                f"Mean difference between symmetrized and original fcq: {np.mean(np.abs(fcq - fcq_symm))}"
-            )
-        return fcq_symm
 
     def get_fcq_in_star(self, fcq, aq, verbose=True):
         """
@@ -320,7 +319,13 @@ class Symmetrizer:
 
         # Get star of the q-point
         star_xq = self.get_star_q(xq, verbose)
-        nq_tot = 2 * self.nqs if self.imq == 0 else self.nqs
+        # In the special case that -q is NOT in the star,
+        # We compute the FCQ at -q anyway using TRS and include it
+        if self.imq == 0:
+            nq_tot = 2 * self.nqs
+            star_xq = np.concatenate((star_xq, -star_xq), axis=0)
+        else:
+            nq_tot = self.nqs
 
         # Get the FC(q) in the star
         fcq_star = espresso_symm.q2qstar_ph(
@@ -343,12 +348,6 @@ class Symmetrizer:
         final_fcq = {}
         for i, xqq in enumerate(star_xq):
             qq = self.get_aq_from_xq(xqq)
-            D_blocks = np.zeros((self.nat, self.nat, 3, 3), dtype=np.complex128)
-            for na in range(self.nat):
-                for nb in range(self.nat):
-                    D_blocks[na, nb] = fcq_star[i, :, :, na, nb]
-            final_fcq[tuple(qq)] = D_blocks.swapaxes(1, 2).reshape(
-                3 * self.nat, 3 * self.nat
-            )
+            final_fcq[tuple(qq)] = fcq_star[i, :, :]
 
         return final_fcq

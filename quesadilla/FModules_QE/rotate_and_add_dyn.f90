@@ -108,15 +108,14 @@ subroutine symdynph_gq_new(xq, at, bg, fcq, s, invs, rtau, irt, nsymq, &
   !! input: true if a symmetry q->-q+G
   double complex, intent(in) :: fcq(3*nat, 3*nat)
   !! input: the matrix to symmetrize
-  double complex, intent(out) :: fcqsymm(3, 3, nat, nat)
+  double complex, intent(out) :: fcqsymm(3*nat, 3*nat)
   !! output: the matrix to symmetrize
   !
   ! ... local variables
   !
   double precision, parameter :: tpi = 6.283185307179586
   ! 2*pi
-  integer :: isymq, sna, snb, irot, na, nb, ipol, jpol, lpol, kpol, icar, jcar, i, j, &
-             iflb(nat, nat)
+  integer :: isymq, sna, snb, irot, na, nb, ipol, jpol, lpol, kpol, iflb(nat, nat)
   ! counters, indices, work space
 
   double precision :: arg
@@ -124,18 +123,10 @@ subroutine symdynph_gq_new(xq, at, bg, fcq, s, invs, rtau, irt, nsymq, &
 
   double complex :: phi(3, 3, nat, nat), phip(3, 3, nat, nat), work(3, 3), fase, faseq(48)
   ! work space, phase factors
-
-  !CALL scompact_dyn(nat, fcq, phi)
-  do i = 1, 3*nat
-    na = (i - 1)/3 + 1
-    icar = i - 3*(na - 1)
-    do j = 1, 3*nat
-      nb = (j - 1)/3 + 1
-      jcar = j - 3*(nb - 1)
-      phi(icar, jcar, na, nb) = fcq(i, j)
-      ! print *, "PHI1:", icar, jcar, na, nb, phi(icar, jcar, na, nb)
-    end do
-  end do
+  !
+  ! Convert to (3,3,nat,nat) format in array phi
+  !
+  call scompact_dyn(nat, fcq, phi)
 
   ! Convert to cartesian coordinates
   do na = 1, nat
@@ -270,8 +261,10 @@ subroutine symdynph_gq_new(xq, at, bg, fcq, s, invs, rtau, irt, nsymq, &
       call trntnsc(phi(1, 1, na, nb), at, bg, +1)
     end do
   end do
-  !CALL compact_dyn(nat, fcqsymm, phi)
-  fcqsymm = phi
+  !
+  ! Finally, we go back to (3*nat,3*nat) format
+  !
+  call compact_dyn(nat, fcqsymm, phi)
 
   return
 end subroutine symdynph_gq_new

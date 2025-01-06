@@ -46,7 +46,7 @@ subroutine q2qstar_ph(fcq, at, bg, nat, nsym, s, invs, irt, rtau, &
   !! list of q in the star
   integer, intent(in) :: nq_tot
   !! Total number of q accounting for the -q if it's not already present
-  double complex, intent(out) :: fcqstar(nq_tot, 3, 3, nat, nat)
+  double complex, intent(out) :: fcqstar(nq_tot, 3*nat, 3*nat)
   !! the output dynamical matrix at each q in the star
 
   !
@@ -65,22 +65,9 @@ subroutine q2qstar_ph(fcq, at, bg, nat, nsym, s, invs, irt, rtau, &
   nsq = nsym/nq
   if (nsq*nq /= nsym) call errore('q2star_ph', 'wrong degeneracy', 1)
   !
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  ! Writes dyn.mat. dyn(3*nat,3*nat) on the 4-index array phi(3,3,nat,nat)
+  ! Expand the FC(q) to a 4-index array phi(3,3,nat,nat)
   !
-  !CALL scompact_dyn(nat, fcq, phi)
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  !phi = fcq
-  do i = 1, 3*nat
-    na = (i - 1)/3 + 1
-    icar = i - 3*(na - 1)
-    do j = 1, 3*nat
-      nb = (j - 1)/3 + 1
-      jcar = j - 3*(nb - 1)
-      phi(icar, jcar, na, nb) = fcq(i, j)
-      !print *, "PHI1:", icar, jcar, na,nb, phi(icar, jcar, na, nb)
-    end do
-  end do
+  call scompact_dyn(nat, fcq, phi)
   !
   ! Go from Cartesian to Crystal coordinates
   !
@@ -166,24 +153,17 @@ subroutine q2qstar_ph(fcq, at, bg, nat, nsym, s, invs, irt, rtau, &
         end do
       end do
       !
-      ! and writes it (changing temporarily sign to q)
+      ! Store the matrix for -q towards the end of the list
       !
       phiqstar(counter + nq, :, :, :, :) = phi2
     end if
   end do
-  fcqstar = phiqstar
-  !DO iq = 1, nq_tot
-  !  !CALL compact_dyn(nat, fcqstar(iq, :, :), phiqstar(iq, :, :, :, :))
-  !  DO i = 1, 3*nat
-  !    na = (i - 1)/3 + 1
-  !    icar = i - 3*(na - 1)
-  !    DO j = 1, 3*nat
-  !      nb = (j - 1)/3 + 1
-  !      jcar = j - 3*(nb - 1)
-  !      fcqstar(iq, i, j) = phiqstar(iq, icar, jcar, na, nb)
-  !    END DO
-  !  END DO
-  !END DO
+  !
+  ! Save the dynamical matrices at each q point as (3*nat,3*nat) array
+  !
+  do iq = 1, nq_tot
+    call compact_dyn(nat, fcqstar(iq, :, :), phiqstar(iq, :, :, :, :))
+  end do
   !
   return
 end subroutine q2qstar_ph
