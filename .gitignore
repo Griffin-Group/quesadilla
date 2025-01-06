@@ -2,6 +2,7 @@
 **/qe/**
 *.mod
 temp/**
+quesadilla/FModules_QEv0/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

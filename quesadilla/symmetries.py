@@ -2,7 +2,6 @@ import numpy as np
 from numpy.typing import ArrayLike
 from pymatgen.core.structure import Structure
 
-# from pymatgen.util.coord import pbc_diff
 import quesadilla.espresso_symm as espresso_symm
 
 
@@ -22,28 +21,34 @@ class Symmetrizer:
         # Structure
         self.structure = structure
 
-        # Setup the threshold
-        self.threshold = threshold
-        espresso_symm.symm_base.set_accep_threshold(self.threshold)
-
         # Define QE Variables with fortran-ready data types
         # NOTE: we use the same names as the QE Fortran routines
         self.nat = np.intc(len(structure))  # Number of atoms
-        # Array with symmetry matrices in fractional coordinates
+        # s(:,:,i) is the i-th symmetry operation. Zeros for missing symmetries
         self.s = np.zeros((3, 3, 48), dtype=np.intc, order="F")
-        # TODO: array with ??
+        # irt(i,j) is the index of the atom you get from applying symmetry i to atom j
         self.irt = np.zeros((48, self.nat), dtype=np.intc, order="F")
         # Array with index of inverse symmetry of each operation
         self.invs = np.zeros((48), dtype=np.intc, order="F")
         # Array with S.r_a - r_a for each symm op and atom a
         self.rtau = np.zeros((3, 48, self.nat), dtype=np.float64, order="F")
-        # TODO: Array with ??
+        # ft(:, j) is the fractional translation of symmetry j in FRAC coords
         self.ft = np.zeros((3, 48), dtype=np.float64, order="F")
-
-        self.minus_q = False
-        self.irotmq = np.intc(0)
-        self.nsymq = np.intc(0)
+        # Number of symmetries in the crystal
         self.nsym = np.intc(0)
+        # Number of symmetries in the Bravais lattice
+        self.nrot = np.intc(0)
+
+        # Whether there is a symm op S_{-} such that S_{-} . q = -q + G
+        self.minus_q = np.array([True], dtype=np.intc)
+        # s(:, :, irotmq) is the symmetry operation that maps q to -q + G
+        self.irotmq = np.intc(0)
+        # This is the G vector in S_{-} . q = -q + G
+        self.gimq = np.zeros((3), dtype=np.float64, order="F")
+        # gi(:, i) is the G vector in S(:,:,i)@q = q + G
+        self.gi = np.zeros((3, 48), dtype=np.float64, order="F")
+        # Number of symmetries in the star of a q-point
+        self.nsymq = np.intc(0)
 
         # Dictionary of atomic symbol : unique number
         unique_species = list({site.species_string for site in structure})
@@ -64,354 +69,285 @@ class Symmetrizer:
             order="F",
         )
 
-    def setup_little_cogroup(self, q: ArrayLike, verbose: bool = False):
+    def get_xq_from_aq(self, aq: ArrayLike):
         """
-        Get symmetries of the small group of q
+        Get the q-point in Cartesian coordinates / (2*pi) from a q-point in fractional coordinates.
 
-        Setup the symmetries in the small group of Q.
+        Parameters:
+            - aq : ndarray(3)
+                The q-point in fractional coordinates.
 
-        Parameters
-        ----------
-            q_point : ndarray
-            q vector in FRACTIONAL COORDINATES
+        Returns:
+            ndarray(3)
+                The q-point in Cartesian coordinates / (2*pi).
         """
-        q = np.array(q, dtype=np.float64, order="F")
-
-        # ------- BRAVAIS LATTICE SYMMETRIES -------
-        # Setup the bravais lattice
-        espresso_symm.symm_base.set_at_bg(self.at, self.bg)
-
-        # Prepare the symmetries
-        espresso_symm.symm_base.set_sym_bl()
-
-        if verbose:
-            print("Symmetries of the bravais lattice:", espresso_symm.symm_base.nrot)
-        # Now copy all the work initialized on the symmetries inside python
-        self.s = np.copy(espresso_symm.symm_base.s)
-        self.ft = np.copy(espresso_symm.symm_base.ft)
-        self.nsym = espresso_symm.symm_base.nrot
-        # ---------------------------
-
-        # ------- CRYSTAL SYMMETRIES -------
-        # TODO: implement magnetism (currently just a dummy variable)
-        m_loc = np.zeros((3, self.nat), dtype=np.float64, order="F")
-
-        # Find the symmetries of the crystal
-        # TODO: this doesn't work for nonsymmorphic SGs?
-        espresso_symm.symm_base.find_sym(self.tau, self.ityp, 6, 6, 6, False, m_loc)
-
-        if verbose:
-            print("Symmetries of the crystal:", espresso_symm.symm_base.nsym)
-
-        # Now copy all the work initialized on the symmetries inside python
-        self.s = np.copy(espresso_symm.symm_base.s)
-        self.ft = np.copy(espresso_symm.symm_base.ft)
-        # -----------------------------------
-
-        # ------- SMALL GROUP OF Q -------
-        syms = np.zeros((48), dtype=np.intc)
-
-        # Initialize to true the symmetry of the crystal
-        syms[: espresso_symm.symm_base.nsym] = np.intc(1)
-
-        self.minus_q = espresso_symm.symm_base.smallg_q(q, 0, syms)
-        self.nsymq = espresso_symm.symm_base.copy_sym(
-            espresso_symm.symm_base.nsym, syms
-        )
-        self.nsym = espresso_symm.symm_base.nsym
-
-        # Recompute the inverses
-        espresso_symm.symm_base.inverse_s()
-
-        if verbose:
-            print(f"Symmetries of the small group of q = {np.round(q, 5)}:", self.nsymq)
-        # --------------------------------
-
-        # Assign symmetries
-        self.s = np.copy(espresso_symm.symm_base.s)
-        self.invs = np.copy(espresso_symm.symm_base.invs)
-        self.ft = np.copy(espresso_symm.symm_base.ft)
-        self.irt = np.copy(espresso_symm.symm_base.irt)
-
-        # Compute the additional shift caused by fractional translations
-        self.rtau = espresso_symm.sgam_ph_new(
-            self.at,
-            self.bg,
-            espresso_symm.symm_base.nsym,
-            self.s,
-            self.irt,
-            self.tau,
-            self.nat,
-        )
-
-        # Convert q to cartesian coordinates
-        # lgamma = np.allclose(q, [0, 0, 0])
-        # self.irotmq = 0
-        # if self.minus_q:
-        #    xq = np.array(
-        #        self.structure.lattice.reciprocal_lattice.get_cartesian_coords(q)
-        #        / (2 * np.pi),
-        #        dtype=np.float64,
-        #        order="F",
-        #    )
-        #    self.irotmq = espresso_symm.set_irotmq(
-        #        xq,
-        #        self.s,
-        #        self.nsymq,
-        #        self.nsym,
-        #        self.minus_q,
-        #        self.bg,
-        #        self.at,
-        #        lgamma,
-        #    )
-        #    print("IROTMQ from QE:", self.irotmq)
-        # self.irotmq = 0
-        # if self.minus_q:
-        #   # Get the first symmetry:
-        #   for k in range(self.nsym):
-        #       # Position feels the symmetries with S (fortran S is transposed)
-        #       # While q vector feels the symmetries with S^t (so no .T required for fortran matrix)
-        #       new_q = self.s[:,:, k].dot(q)
-        #       # Compare new_q with aq
-        #       new_q = pbc_diff(new_q, [0, 0, 0])
-        #       if  np.allclose(q, -new_q, atol=1e-3, rtol=0):
-        #           #print("Found a symmetry that maps q to -q")
-        #           #print("Symmetry:", self.s[:,:, k])
-        #           #print("q:", np.round(q, 5))
-        #           #print("new_q:", np.round(new_q, 5))
-        #           self.irotmq = k + 1
-        #           #print("IROTMQ from python:", self.irotmq)
-        #           break
-        #   if self.irotmq == 0:
-        #       #print ("Error, the fortran code tells me there is S so that Sq = -q + G")
-        #       #print ("But I did not find such a symmetry!")
-        #       raise ValueError("Error in the symmetrization. See stdout")
-
-    def setup_sg_symmetries(self, verbose=False):
-        self.setup_little_cogroup([0, 0, 0], verbose=verbose)
-
-    def get_star_q(self, q: ArrayLike, verbose=False):
-        """
-        GET THE Q STAR
-        ==============
-
-        Given a vector in q space, get the whole star.
-        We use the quantum espresso subrouitine.
-
-        Parameters
-        ----------
-            q_vector : ndarray(size= 3, dtype = np.float64)
-                The q vector
-
-        Results
-        -------
-            q_star : ndarray(size = (nq_star, 3), dtype = np.float64)
-                The complete q star
-        """
-        q = np.array(q, dtype=np.float64, order="F")
-        self.setup_sg_symmetries(verbose=False)
-        full_symmetries = np.copy(self.s)
-        full_invs = np.copy(self.invs)
-        # self.setup_little_cogroup(q, verbose=False)
-        q = np.array(
-            self.structure.lattice.reciprocal_lattice.get_cartesian_coords(q)
+        return np.array(
+            self.structure.lattice.reciprocal_lattice.get_cartesian_coords(aq)
             / (2 * np.pi),
             dtype=np.float64,
             order="F",
         )
 
-        # Returns:
+    def get_aq_from_xq(self, xq: ArrayLike):
+        """
+        Get the q-point in fractional coordinates from a q-point in Cartesian coordinates / (2*pi).
+
+        Parameters:
+            - xq : ndarray(3)
+                The q-point in Cartesian coordinates / (2*pi).
+
+        Returns:
+            ndarray(3)
+                The q-point in fractional coordinates.
+        """
+
+        return np.array(
+            self.structure.lattice.reciprocal_lattice.get_fractional_coords(
+                xq * (2 * np.pi)
+            ),
+            dtype=np.float64,
+            order="F",
+        )
+
+    def _setup_lattice_symmetries(self, verbose: bool = False):
+        """
+        Sets up the symmetries of the bravais lattice.
+
+        Parameters:
+            verbose : bool
+                Whether to print the number of symmetries of the bravais lattice.
+        """
+
+        # Sets up the symmetries of the bravais lattice
+        espresso_symm.symm_base.set_sym_bl(self.at)
+
+        # TODO: make these return values instead of modifying module vars
+        self.s = np.copy(espresso_symm.symm_base.s)
+        self.ft = np.copy(espresso_symm.symm_base.ft)
+        self.nrot = espresso_symm.symm_base.nrot
+
+        if verbose:
+            print("Symmetries of the bravais lattice:", self.nrot)
+
+    def _setup_crystal_symmetries(self, verbose: bool = False):
+        """
+        Sets up the symmetries of the crystal.
+
+        Parameters:
+            verbose : bool
+                Whether to print the number of symmetries of the crystal.
+        """
+        # TODO: implement magnetism (currently just a dummy variable)
+        # TODO: some lines in symm_base need to be uncommented/checked
+        m_loc = np.zeros((3, self.nat), dtype=np.float64, order="F")
+        nspin_mag = 1
+
+        # Find the symmetries of the crystal
+        espresso_symm.symm_base.set_sym(
+            self.at, self.bg, self.tau, self.ityp, nspin_mag, m_loc
+        )
+
+        # TODO: make these return values instead of modifying module vars
+        self.s = np.copy(espresso_symm.symm_base.s)
+        self.ft = np.copy(espresso_symm.symm_base.ft)
+        self.nsym = espresso_symm.symm_base.nsym
+        self.crystal_s = np.copy(self.s)
+        self.crystal_invs = np.copy(self.invs)
+        self.crystal_irt = np.copy(self.irt)
+
+        if verbose:
+            print("Symmetries of the crystal:", self.nsym)
+
+    def _setup_little_group(self, xq: ArrayLike, verbose: bool = False):
+        """
+        Sets up the little group (small group) of a q-point.
+
+        Parameters:
+            - xq : ndarray(3), q point in CARTESIAN coordinates / (2 * pi)
+        """
+        # Set up the symmetries of the lattice
+        self._setup_lattice_symmetries(verbose)
+        # Set up the symmetries of the crystal
+        self._setup_crystal_symmetries(verbose)
+        # ~~~~~~~~~~PART 1~~~~~~~~~~
+        # Set up the symmetries of the small group of q
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~
+        syms = np.zeros((48), dtype=np.intc)
+        syms[: self.nsym] = np.intc(1)
+
+        # TODO: make these return values instead of modifying module vars
+        espresso_symm.smallg_q(xq, 0, self.at, self.nsym, self.s, syms, self.minus_q)
+        # Copy the symmetries of the small group of q
+        self.nsymq = espresso_symm.symm_base.copy_sym(
+            espresso_symm.symm_base.nsym, syms
+        )
+        # Recompute the inverses as the order of sym.ops. has changed
+        espresso_symm.symm_base.inverse_s()
+        # Copy stuff into python
+        self.s = np.copy(espresso_symm.symm_base.s)
+        self.invs = np.copy(espresso_symm.symm_base.invs)
+        self.ft = np.copy(espresso_symm.symm_base.ft)
+        self.irt = np.copy(espresso_symm.symm_base.irt)
+
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # PART 2: figure out the q -> -q+G symmetries
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        lgamma = np.allclose(xq, [0, 0, 0], rtol=0, atol=1e-5)
+        self.irotmq, self.gi, self.gimq = espresso_symm.set_giq(
+            xq, lgamma, self.bg, self.at, self.s, self.nsymq, self.nsym, self.minus_q
+        )
+        # Part 3: Compute rtau = S . r_a - r_a
+        self.rtau = espresso_symm.sgam_lr(
+            self.at, self.bg, self.nsym, self.s, self.irt, self.tau
+        )
+        
+        # Print some info
+        if verbose:
+            q = self.structure.lattice.reciprocal_lattice.get_fractional_coords(
+                xq * 2 * np.pi
+            )
+            print(f"Symmetries of the small group of q = {np.round(q, 5)}:", self.nsymq)
+            if self.minus_q:
+                gimq = self.structure.lattice.reciprocal_lattice.get_fractional_coords(
+                    self.gimq * 2 * np.pi
+                )
+                print(
+                    (
+                        f"in addition sym. q -> -q+G, with irotmq = {self.irotmq}"
+                        f" and G = {np.round(gimq, 3)}"
+                    )
+                )
+
+    def get_star_q(self, xq: ArrayLike, verbose: bool = False, debug: bool = False):
+        # sourcery skip: extract-method
+        """
+        Get the star of a q-point.
+
+        Parameters:
+            - xq : ndarray(3), q point in CARTESIAN coordinates / (2 * pi)
+            - verbose : bool
+                Whether to print the number of q-points in the star and the list of q-points in the star.
+            - debug : bool
+                Whether to print debug information from Fortran routines.
+        
+        Returns:
+            ndarray(nq, 3), the q-points in the star in CARTESIAN coordinates / (2 * pi)
+        """
+        # To get the star we need the symmetries of the WHOLE CRYSTAL
+        # So that's just the litle group of the Gamma point
+        self._setup_little_group(np.array([0, 0, 0]), verbose)
+        # Return values are:
         # 1. number of q-points in the star
         # 2. The vector that q is mapped to under each symmop
         # 3. Index of q in sxq
         # 4. Index of -q in sxq, 0 if not present
-        nq_new, sxq, isq, imq = espresso_symm.star_q(
-            q,  # q point in cartesian coordinates/2pi
+        self.nqs, self.sxq, self.isq, self.imq = espresso_symm.star_q(
+            xq,  # q point in cartesian coordinates/2pi
             self.at,  # lattice vectors (see __init__ for format)
             self.bg,  # rec. lattice vectors (see __init__ for format)
-            self.nsymq,  # Number of symmetries in the small group of q
-            full_symmetries,  # Array of ALL symmetries of the crystal
-            full_invs,  # Index of inverse of s in self.s
-            verbose,  # Verbosity flag
+            self.nsym,  # Number of symmetries in the small group of q
+            self.s,  # Array of ALL symmetries of the crystal
+            self.invs,  # Index of inverse of s in self.s
+            False,  # Debug flag
         )
+        star_xq = self.sxq[:, : self.nqs].T
+        if verbose:
+            q_star = np.array([self.get_aq_from_xq(xqs) for xqs in star_xq])
+            print("Number of q in the star:", self.nqs)
+            print("List of q in the star:")
+            for i, qq in enumerate(q_star):
+                print(f"{i+1}    {np.round(qq, 8)}")
+            if self.imq == 0:
+                print("In addition, there is the -q list, which is NOT in the star:")
+                for i, qq in enumerate(q_star):
+                    print(f"{i+1+self.nqs}    {np.round(qq, 8)}")
+            else:
+                mq = self.get_aq_from_xq(self.sxq[:, self.imq - 1])  # -q
+                gmq = self.get_aq_from_xq(self.gimq)  # G
+                q = self.get_aq_from_xq(xq)  # q
+                print("-q is also in the star: ", np.round(mq, 8))
+                print("With G = ", np.round(gmq, 8))
+                print("So that S_ @ q - (-q + G)", np.round(mq + q - gmq, 5))
 
-        # print("----------Inside routine get_star_q")
-        # print("I am getting nq_new:", nq_new)
-        # print("I am getting sxq:", sxq.T[:nq_new])
-        # print("I am getting isq:", isq)
-        # print("I am getting imq:", imq)
-        # do while (isq (isym) /= imq)
-        #    isym = isym + 1
-        # enddo
-        # irotmq = np.where(isq == imq)[0][0]
-        # print("I am getting irotmq:", irotmq)
-        ##if imq > 0 and not np.allclose(sxq[:, irotmq], -q, atol=1e-3, rtol=0):
-        ##    print("WARNING: sxq[imq] is not the inverse of -q")
-        # print(f"sxq[{irotmq}]:", sxq[:, irotmq])
-        # print("-q:", -q)
-        # print("----------End of Inside routine get_star_q")
+        return star_xq
 
-        # TODO: this implementation is quite confusing
-        # TODO: it is only really necessary because the imq thing doesn't
-        # TODO: work properly for nonsymmorphic space groups
-        if imq != 0:
-            total_star = np.zeros((nq_new, 3), dtype=np.float64)
-        else:
-            # If -q is not in the star we stick it in there
-            total_star = np.zeros((2 * nq_new, 3), dtype=np.float64)
-
-        total_star[:nq_new, :] = sxq[:, :nq_new].T
-
-        if imq == 0:
-            # Stick -q into the star
-            total_star[nq_new:, :] = -sxq[:, :nq_new].transpose()
-
-        return total_star
-
-    def get_fcq_in_star(self, fcq, q):
+    def symmetrize_fcq(self, fcq: ArrayLike, xq: ArrayLike, verbose: bool = False):
         """
-        APPLY THE Q STAR SYMMETRY
-        =========================
+        Symmetrize the force constants at a q-point.
 
-        Given the fc matrix at each q in the star, it applies the symmetries in between them.
+        Parameters:
+            - fcq : ndarray(3 * nat, 3 * nat), in FRACTIONAL coordinates
+            - q : ndarray(3)
+                The q vector, in CARTESIAN coordinates / (2 * pi)
 
-        Parameters
-        ----------
-            - fcq : ndarray(nq, 3xnat, 3xnat)
-                The dynamical matrices for each q point in the star
-            - q_star : ndarray(nq, 3)
-                The q vectors that belongs to the same star
+        Returns:
+            ndarray(3 * nat, 3* nat): The symmetrized force constants at q in FRACTIONAL coordinates.
         """
-
-        # Setup all the symmetries
-        q = np.array(q, dtype=np.float64, order="F")
-        q_star = self.get_star_q(q, verbose=False)
-        nq_total = np.shape(q_star)[0]
-        # print("Got total star:", q_star)
-
-        # q = np.array(q, dtype=np.float64, order="F")
-        # Convert to cartesian coordinates
-        # q = np.array(
-        #    self.structure.lattice.reciprocal_lattice.get_cartesian_coords(q)
-        #    / (2 * np.pi),
-        #    dtype=np.float64,
-        #    order="F",
-        # )
-        # self.setup_little_cogroup(q, verbose=True)
-        nq_no_mq, sxq, isq, imq = espresso_symm.star_q(
-            q_star[0],
+        self._setup_little_group(xq, verbose)
+        return espresso_symm.symdynph_gq_new(
+            xq,
             self.at,
             self.bg,
-            self.nsymq,
+            fcq,
             self.s,
             self.invs,
-            1,
+            self.rtau,
+            self.irt,
+            self.nsymq,
+            self.irotmq,
+            self.minus_q,
         )
-        # print("I am getting nq_new vs nq:", nq_new, nq)
-        # print("I am getting isq:", isq)
-        # print("I am getting imq:", imq)
-        # print("I am getting sxq:", sxq.T)
-        # assert nq_new == nq
 
+    def get_fcq_in_star(self, fcq, aq, verbose=True):
+        """
+        Get the force constants in the star of a q-point.
+
+        Parameters:
+            - fcq : ndarray(3 * nat, 3 * nat), Fourier-transformed force constants
+                        in FRACTIONAL coordinates
+            - q : ndarray(3)
+                The q vector, in FRACTIONAL coordinates
+
+        Returns:
+            dict: The force constants in the star of q. Keys are the q-points in fractional coordinates. Values are the force constants in the star in the form of a 3*nat x 3*nat matrix in FRACTIONAL coordinates.
+        """
+
+        # Symmetrize the force constants at q
+        xq = self.get_xq_from_aq(aq)
         fcq = np.array(fcq, dtype=np.complex128, order="F")
-        dyn_star = np.zeros(
-            (nq_total, 3, 3, self.nat, self.nat), dtype=np.complex128, order="F"
+        fcq_symm = self.symmetrize_fcq(fcq, xq, verbose)
+
+        # Get star of the q-point
+        star_xq = self.get_star_q(xq, verbose)
+        # In the special case that -q is NOT in the star,
+        # We compute the FCQ at -q anyway using TRS and include it
+        if self.imq == 0:
+            nq_tot = 2 * self.nqs
+            star_xq = np.concatenate((star_xq, -star_xq), axis=0)
+        else:
+            nq_tot = self.nqs
+
+        # Get the FC(q) in the star
+        fcq_star = espresso_symm.q2qstar_ph(
+            fcq_symm,
+            self.at,
+            self.bg,
+            self.nsym,
+            self.s,
+            self.invs,
+            self.irt,
+            self.rtau,
+            self.nqs,
+            self.sxq,
+            self.isq,
+            self.imq,
+            nq_tot,
         )
-        print("self.nsym:", self.nsym)
-        dyn_star = espresso_symm.q2qstar_out(
-            fcq,  # FC matrix at q
-            self.at,  # lattice vectors
-            self.bg,  # reciprocal lattice vectors
-            self.nsym,  # Number of symmetries in whole crystal
-            self.s,  # All symmetries in the crystal
-            self.invs,  # Index of inverse of s in self.s
-            self.irt,  # Index of atom you get from apply S to atom a
-            self.rtau,  # Array with S.r_a - r_a for each symm op and atom a
-            nq_no_mq,  # Number of q points in the star
-            sxq,  # S.q for each symmetry in the crystal
-            isq,  # Index of S.q in sxq for each S
-            imq,  # Index of -q in sxq for each S
-            nq_total,  # Will be 2*nq_no_mq only if -q is NOT in the star
-            nat=self.nat,  # Number of atoms in the crystal
-        )
 
-        dynmats = {}
-        for i, q in enumerate(q_star):
-            q = np.round(
-                self.structure.lattice.reciprocal_lattice.get_fractional_coords(
-                    q * (2 * np.pi)
-                ),
-                decimals=6,
-            )
-            D_blocks = np.zeros((self.nat, self.nat, 3, 3), dtype=np.complex128)
-            for na in range(self.nat):
-                for nb in range(self.nat):
-                    D_blocks[na, nb] = dyn_star[i, :, :, na, nb]
-            dynmats[tuple(q)] = D_blocks.swapaxes(1, 2).reshape(
-                3 * self.nat, 3 * self.nat
-            )
+        # Turn into a dictionary
+        final_fcq = {}
+        for i, xqq in enumerate(star_xq):
+            qq = self.get_aq_from_xq(xqq)
+            final_fcq[tuple(qq)] = fcq_star[i, :, :]
 
-        return dynmats
-
-    # def SymmetrizeDynQ(self, dyn_matrix, q_point):
-    #    """
-    #    DYNAMICAL MATRIX SYMMETRIZATION
-    #    ===============================
-
-    #    Use the Quantum ESPRESSO fortran code to symmetrize the dynamical matrix
-    #    at the given q point.
-
-    #    NOTE: the symmetries must be already initialized.
-
-    #    Parameters
-    #    ----------
-    #        dyn_matrix : ndarray (3nat x 3nat)
-    #            The dynamical matrix associated to the specific q point (cartesian coordinates)
-    #        q_point : ndarray 3
-    #            The q point related to the dyn_matrix.
-
-    #    The input dynamical matrix will be modified by the current code.
-    #    """
-
-    #    # TODO: implement hermitianity to speedup the conversion
-
-    #    # Prepare the array to be passed to the fortran code
-    #    QE_dyn = np.zeros(
-    #        (3, 3, self.QE_nat, self.QE_nat), dtype=np.complex128, order="F"
-    #    )
-
-    #    # Get the crystal coordinates for the matrix
-    #    for na in range(self.QE_nat):
-    #        for nb in range(self.QE_nat):
-    #            fc = dyn_matrix[3 * na : 3 * na + 3, 3 * nb : 3 * nb + 3]
-    #            QE_dyn[:, :, na, nb] = Methods.convert_matrix_cart_cryst(
-    #                fc, self.structure.unit_cell, False
-    #            )
-
-    #    # Prepare the xq variable
-    #    # xq = np.ones(3, dtype = np.float64)
-    #    xq = np.array(q_point, dtype=np.float64)
-
-    #    # USE THE QE library to perform the symmetrization
-    #    espresso_symm.symdynph_gq_new(
-    #        xq,
-    #        QE_dyn,
-    #        self.QE_s,
-    #        self.QE_invs,
-    #        self.QE_rtau,
-    #        self.QE_irt,
-    #        self.QE_irotmq,
-    #        self.QE_minus_q,
-    #        self.QE_nsymq,
-    #        self.QE_nat,
-    #    )
-
-    #    # Return to cartesian coordinates
-    #    for na in range(self.QE_nat):
-    #        for nb in range(self.QE_nat):
-    #            fc = QE_dyn[:, :, na, nb]
-    #            dyn_matrix[3 * na : 3 * na + 3, 3 * nb : 3 * nb + 3] = (
-    #                Methods.convert_matrix_cart_cryst(
-    #                    fc, self.structure.unit_cell, True
-    #                )
-    #            )
+        return final_fcq
