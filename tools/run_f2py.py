@@ -11,22 +11,21 @@ def main():
 
     # Get the build directory from the command-line argument
     build_dir = os.path.join(sys.argv[1], "f2py")
-    print("&&&&&&&&&&&&& Making f2py in build directory:", build_dir)
     if not os.path.exists(build_dir):
         os.makedirs(build_dir)
 
     # Define the Fortran source files
     fortran_sources = [
-        "quesadilla/FModules_QE/trntnsc.f90",
-        "quesadilla/FModules_QE/rotate_and_add_dyn.f90",
+        "quesadilla/FModules_QE/transformations.f90",
+        "quesadilla/FModules_QE/symmetrize_fcq.f90",
         "quesadilla/FModules_QE/star_q.f90",
         "quesadilla/FModules_QE/symm_base.f90",
-        "quesadilla/FModules_QE/q2qstar_ph.f90",
+        #"quesadilla/FModules_QE/q2qstar_ph.f90",
         "quesadilla/FModules_QE/eqvect.f90",
         "quesadilla/FModules_QE/invmat.f90",
-        "quesadilla/FModules_QE/sgam_ph.f90",
-        "quesadilla/FModules_QE/smallgq.f90",
-        "quesadilla/FModules_QE/cryst_to_cart.f90",
+        #"quesadilla/FModules_QE/sgam_ph.f90",
+        "quesadilla/FModules_QE/little_group.f90",
+        #"quesadilla/FModules_QE/cryst_to_cart.f90",
         "quesadilla/FModules_QE/io_global.f90",
         "quesadilla/FModules_QE/error_handler.f90",
     ]
