@@ -13,6 +13,7 @@ dependencies = [
     "numpy",
     "phonopy",
     "pymatgen",
+    "pulp",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",

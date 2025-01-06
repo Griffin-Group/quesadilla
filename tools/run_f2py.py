@@ -17,7 +17,6 @@ def main():
 
     # Define the Fortran source files
     fortran_sources = [
-        "quesadilla/FModules_QE/q2qstar_out.f90",
         "quesadilla/FModules_QE/trntnsc.f90",
         "quesadilla/FModules_QE/rotate_and_add_dyn.f90",
         "quesadilla/FModules_QE/star_q.f90",

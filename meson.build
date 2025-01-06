@@ -44,7 +44,6 @@ py.install_sources(['quesadilla/__init__.py',
 # Install fortran module
 py.extension_module('espresso_symm',
                      [
-                     'quesadilla/FModules_QE/q2qstar_out.f90',
                      'quesadilla/FModules_QE/trntnsc.f90',
                      'quesadilla/FModules_QE/rotate_and_add_dyn.f90',
                      'quesadilla/FModules_QE/star_q.f90',
