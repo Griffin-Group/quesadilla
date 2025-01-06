@@ -20,13 +20,9 @@ def main():
         "quesadilla/FModules_QE/symmetrize_fcq.f90",
         "quesadilla/FModules_QE/star_q.f90",
         "quesadilla/FModules_QE/symm_base.f90",
-        #"quesadilla/FModules_QE/q2qstar_ph.f90",
         "quesadilla/FModules_QE/eqvect.f90",
         "quesadilla/FModules_QE/invmat.f90",
-        #"quesadilla/FModules_QE/sgam_ph.f90",
         "quesadilla/FModules_QE/little_group.f90",
-        #"quesadilla/FModules_QE/cryst_to_cart.f90",
-        "quesadilla/FModules_QE/io_global.f90",
         "quesadilla/FModules_QE/error_handler.f90",
     ]
 

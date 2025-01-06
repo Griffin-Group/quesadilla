@@ -12,7 +12,6 @@ subroutine star_q(xq, at, bg, nsym, s, invs, nq, sxq, isq, imq, verbosity)
   ! NB: input s(:,:,1:nsym) must contain all crystal symmetries,
   ! i.e. not those of the small-qroup of q only
   !
-  !use io_global, only: stdout
   implicit none
   !
   integer, intent(in) :: nsym, s(3, 3, 48), invs(48)
