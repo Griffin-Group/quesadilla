@@ -3,7 +3,9 @@
 *.mod
 temp/**
 quesadilla/FModules_QEv0/*
-examples/sc-*
+examples/**/sc-*
+examples/**/quesadilla.yaml
+examples/**/POSCAR_symm
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
