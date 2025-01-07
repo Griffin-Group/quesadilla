@@ -121,7 +121,7 @@ def get_qpoints(
     structure: Structure,
     grid: ArrayLike,
     ibz: bool = True,
-):
+) -> np.ndarray:
     """
     Get the necessary q points for a given structure and grid.
 
@@ -145,7 +145,7 @@ def get_qpoints(
     return qpoints[np.lexsort(qpoints.T)]
 
 
-def get_T_matrices(qpoints):
+def get_T_matrices(qpoints: np.ndarray) -> np.ndarray:
     qpoints_frac = convert_to_fraction_array(qpoints)
     T_matrices = np.zeros((qpoints.shape[0], 3, 3), dtype=int)
 
@@ -158,7 +158,7 @@ def get_T_matrices(qpoints):
 
 def get_supercells(
     prim: Structure, grid: ArrayLike, reduce: bool = True, trim: bool = False
-):
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Generate nondiagonal supercells commensurate with the IBZ.
 
@@ -254,7 +254,7 @@ def pick_smallest_supercells(commensurate, sc_sizes, verbose=False):
 # actually no longer span the full IBZ...?
 
 
-def ensure_positive_det(matrix):
+def ensure_positive_det(matrix: np.ndarray) -> np.ndarray:
     """
     If the matrix has a negative determinant, this function flips the sign of the row with the most negative entries. Phonopy requires the supercell matrix to have a positive determinant.
 
@@ -280,7 +280,7 @@ def ensure_positive_det(matrix):
 # TODO: these two functions are written very similarly to
 # the FORTRAN code so it's they're very difficult to understand.
 # Needs a complete rewrite in a pythonic and understandable way.
-def minkowski_reduce(vecs):
+def minkowski_reduce(vecs: np.ndarray) -> np.ndarray:
     """
     Given a set of 3 vectors in 3D space (rows of `vecs`) that might not be
     Minkowski-reduced, iteratively attempt to Minkowski-reduce them until no
@@ -340,7 +340,7 @@ def minkowski_reduce(vecs):
     return vecs
 
 
-def reduce_vec(vecs, tol=1e-7):
+def reduce_vec(vecs: np.ndarray, tol: float = 1e-7) -> bool:
     """
     Attempt to reduce three 3D vectors (rows of vecs) by checking specific
     linear combinations. If any combination is shorter than the current longest
