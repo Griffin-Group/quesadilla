@@ -142,7 +142,7 @@ def get_qpoints(
         qpoints = np.array([q[0] for q in sga.get_ir_reciprocal_mesh(grid)])
     else:
         qpoints, _ = sga.get_ir_reciprocal_mesh_map(grid)
-    return qpoints
+    return qpoints[np.lexsort(qpoints.T)]
 
 
 def get_T_matrices(qpoints):
@@ -181,14 +181,15 @@ def get_supercells(
 
     q_comm = get_qpoints(prim, grid)
     T_matrices = get_T_matrices(q_comm)
-    # sc_sizes = np.array([np.linalg.det(T) for T in T_matrices])
     for i, T in enumerate(T_matrices):
-        temp_latt_vecs = np.dot(T, prim.lattice.matrix)
-        temp_latt_vecs = minkowski_reduce(temp_latt_vecs)
-        T = np.dot(temp_latt_vecs, prim.lattice.reciprocal_lattice.matrix.T / 2 / np.pi)
+        ndsc_lattice = np.dot(T, prim.lattice.matrix)
+        ndsc_lattice = minkowski_reduce(ndsc_lattice)
+        T = np.dot(ndsc_lattice, prim.lattice.reciprocal_lattice.matrix.T / 2 / np.pi)
         T_matrices[i] = ensure_positive_det(np.rint(T).astype(int))
+    T_matrices = np.array(T_matrices)
+    sc_size = np.array([np.linalg.det(T) for T in T_matrices])
 
-    return np.array(T_matrices), np.array(q_comm)
+    return T_matrices, sc_size, q_comm
 
 
 def pick_smallest_supercells(commensurate, sc_sizes, verbose=False):

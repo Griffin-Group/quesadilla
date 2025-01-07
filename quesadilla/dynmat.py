@@ -13,8 +13,6 @@ import quesadilla.symmetries as symmetries
 from quesadilla.supercells import struct_to_phonopy
 
 
-
-
 def get_nd_phonopy(path, grid, T_sc, q_comm):
     prim = Structure.from_file(os.path.join(path, "POSCAR"))
     primitive, supercell = struct_to_phonopy(prim, grid)
