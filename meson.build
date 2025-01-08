@@ -30,6 +30,9 @@ incdir_f2py = incdir_numpy / '..' / '..' / 'f2py' / 'src'
 inc_f2py = include_directories(incdir_f2py)
 fortranobject_c = incdir_f2py / 'fortranobject.c'
 
+# Get lapack
+lapack_dep = dependency('blas', required: true)
+
 # Prepare the f2py files (module and wrappers)
 run_command(py, 'tools/run_f2py.py', meson.current_build_dir() ,check : true)
 f2py_root = meson.current_build_dir() / 'f2py'
@@ -60,5 +63,5 @@ py.extension_module('espresso_symm',
                      ],
                      include_directories: [inc_np],
                      subdir : 'quesadilla',
-                     dependencies : [py_dep],
+                     dependencies : [py_dep, lapack_dep],
                      install : true)

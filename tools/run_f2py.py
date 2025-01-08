@@ -36,6 +36,8 @@ def main():
         "meson",
         "-m",
         "espresso_symm",
+        "--dep",
+        "blas",
     ] + fortran_sources
 
     # Run f2py
