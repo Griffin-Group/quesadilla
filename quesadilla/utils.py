@@ -34,7 +34,16 @@ DIM = {}
 """
 
 
-def write_monserrat(prim, grid, path):
+def write_lwm(prim, grid, path):
+    """
+    Writes the lattice matrix, irreducible q-points, and grid to files
+    suitable for input to Lloyd-Williams and Monserrat's code.
+
+    Args:
+        prim (pymatgen.Structure): The primitive structure.
+        grid (list): The grid of q-points.
+        path (str): The directory to write the files to.
+    """
     sga = SpacegroupAnalyzer(prim)
     q_irr = sga.get_ir_reciprocal_mesh(grid)
     q_irr = np.array([q[0] for q in q_irr])
@@ -46,7 +55,7 @@ def write_monserrat(prim, grid, path):
     np.savetxt(f"{path}/grid.dat", np.array(grid), fmt="%d", newline=" ")
 
 
-def read_monserrat(path):
+def read_lwm(path):
     """
     Reads kpoint_to_supercell.dat and associated supercell files.
 
@@ -72,7 +81,6 @@ def read_monserrat(path):
         supercell_file = os.path.join(path, f"supercell.{i}.dat")
         T = np.loadtxt(supercell_file, dtype=int)  # Read the 3x3 matrix
         matrices.append(ensure_positive_det(T))
-        # matrices.append(T)
         # for qq in q:
         qq = q[i - 1]
         assert np.allclose(
