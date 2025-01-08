@@ -106,6 +106,13 @@ class SupercellGenerator:
         return supercells_toml
 
     def to_toml(self, output_file):
+        """
+        Write the supercell data to a TOML file.
+
+        Parameters:
+        - output_file: str
+            The output file path.
+        """
         doc = tomlkit.document()
         doc.add("primitive", self._structure_to_toml())
         doc.add("brillouin_zone", self._bz_to_toml())
@@ -116,7 +123,15 @@ class SupercellGenerator:
         print(f"Supercells written to {output_file}")
 
     @classmethod
-    def read_from_toml(cls, input_file: str):
+    def from_toml(cls, input_file: str):
+        """
+        Read the supercell data from a TOML file.
+
+        Parameters:
+        - input_file: str
+            The input file path.
+        """
+
         with open(input_file, "rb") as f:
             data = tomli.load(f)
 
@@ -365,11 +380,6 @@ def pick_smallest_supercells(commensurate, sc_sizes, verbose=False):
     selected_cells = [i for i in range(N) if selected_cells[i] == 1]
 
     return selected_cells
-
-
-# FIXME: How to do Niggli reduction without messing up
-# the commensurate q-points? Here, the niggli-reduced cells
-# actually no longer span the full IBZ...?
 
 
 def ensure_positive_det(matrix: np.ndarray) -> np.ndarray:
