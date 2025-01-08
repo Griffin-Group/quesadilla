@@ -1,12 +1,14 @@
 import os
 
 import numpy as np
-import yaml
+import tomli
+import tomlkit
+from pymatgen.core.lattice import Lattice
 from pymatgen.core.structure import Structure
 from pymatgen.io.vasp.inputs import Kpoints
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
-from quesadilla.supercells import ensure_positive_det, get_supercells
+from quesadilla.supercells import ensure_positive_det, get_qpoints, get_supercells
 
 GET_YAML = """
 # Read force sets from text file
@@ -113,23 +115,16 @@ def get_KPOINTS(struct, kspace):
     return Kpoints.from_dict(k_dict)
 
 
-def generate_files(prim_path: str, grid: list, k_spacing: float = 0.15):
+def generate_files(prime_filename: str, grid: list, k_spacing: float = 0.15):
     """
-    Generates the files for an NDSC phono calculation.
+    Generates the files for an NDSC phonon calculation.
     """
-    root = os.path.dirname(prim_path)
-    prim_original = Structure.from_file(prim_path)
+    root = os.path.dirname(prime_filename)
+    prim_original = Structure.from_file(prime_filename)
     # Standardize the primitive structure
-    prim = SpacegroupAnalyzer(prim_original).get_primitive_standard_structure()
-    prim.translate_sites(np.arange(len(prim)), [0.0, 0.0, 0.0], to_unit_cell=True)
-    if prim_original != prim:
-        prim_path = os.path.join(root, "POSCAR_symm")
-        prim.to(filename=prim_path, fmt="poscar")
-        print("NOTE: The primitive structure has been standardized and dumped to")
-        print(f"      {prim_path}")
-
-    #
-    T_matrices, sc_size, comm_q = get_supercells(prim, grid)
+    prim = standardize_prim(prim_original, root)
+    irr_q = get_qpoints(prim, grid)
+    T_matrices, sc_size, comm_q = get_supercells(prim, irr_q)
     for i, (T, sz, q) in enumerate(zip(T_matrices, sc_size, comm_q)):
         # Print the supercell information
         print(
@@ -152,71 +147,85 @@ def generate_files(prim_path: str, grid: list, k_spacing: float = 0.15):
             f.write(MAKE_DISP.format(T_str))
         with open(os.path.join(sc_path, "get_yaml.conf"), "w") as f:
             f.write(GET_YAML.format(T_str))
-    write_quesadilla_yaml(T_matrices, sc_size, comm_q, root)
+    # write_quesadilla_yaml(T_matrices, sc_size, comm_q, root)
+    write_quesadilla_toml(prim, grid, irr_q, T_matrices, sc_size, comm_q, root)
+
+    return prim, T_matrices, sc_size, comm_q
 
 
-def read_quesadilla_yaml(input_path: str):
-    """
-    Read supercell data from a quesadilla.yaml file.
-
-    Parameters
-    ----------
-    input_path : str
-        Path to the YAML file to be read.
-
-    Returns
-    -------
-    T_matrices : np.ndarray
-        Array of 3x3 transformation matrices.
-    sc_size : np.ndarray
-        Array of integers representing supercell sizes.
-    comm_q : np.ndarray
-        Array of 3D vectors (q-vectors the supercells are commensurate with).
-    """
-    with open(input_path, "r") as f:
-        data = yaml.safe_load(f)
-
-    supercells = data["supercells"]
-
-    # Parse data into numpy arrays
-    T_matrices = np.array([np.array(sc["transformation_matrix"]) for sc in supercells])
-    sc_size = np.array([sc["size"] for sc in supercells], dtype=int)
-    comm_q = np.array([np.array(sc["commensurate_q"]) for sc in supercells])
-
-    return T_matrices, sc_size, comm_q
+def standardize_prim(prim_original, root) -> Structure:
+    prim = SpacegroupAnalyzer(prim_original).get_primitive_standard_structure()
+    prim.translate_sites(np.arange(len(prim)), [0.0, 0.0, 0.0], to_unit_cell=True)
+    if prim_original != prim:
+        prime_filename = os.path.join(root, "POSCAR_symm")
+        prim.to(filename=prime_filename, fmt="poscar")
+        print("NOTE: The primitive structure has been standardized and dumped to")
+        print(f"      {prime_filename}")
+    return prim
 
 
-def write_quesadilla_yaml(
-    T_matrices: np.ndarray, sc_size: np.ndarray, comm_q: np.ndarray, output_path: str
-):
-    """
-    Write supercell data to a YAML file.
+def structure_to_toml(structure: Structure) -> tomlkit.table:
+    primitive = tomlkit.table()
+    primitive.add("lattice", np.round(structure.lattice.matrix, 10).tolist())
+    primitive.add("species", [site.species_string for site in structure])
+    primitive.add("frac_coords", np.round(structure.frac_coords, 10).tolist())
+    primitive["lattice"].multiline(True)
+    primitive["frac_coords"].multiline(True)
 
-    Parameters
-    ----------
-    T_matrices : list of np.ndarray
-        List of 3x3 transformation matrices.
-    sc_size : list of int
-        List of integers representing supercell sizes.
-    comm_q : list of np.ndarray
-        List of 3D vectors (q-vectors the supercells are commensurate with).
-    output_path : str
-        Path to the YAML file to be written.
-    """
-    supercells = [
-        {
-            "index": i + 1,
-            "size": int(sz),
-            "commensurate_q": list(map(float, q)),
-            "transformation_matrix": [list(map(int, row)) for row in T],
-        }
-        for i, (T, sz, q) in enumerate(zip(T_matrices, sc_size, comm_q))
-    ]
-    # Write to YAML file
-    output_file = os.path.join(output_path, "quesadilla.yaml")
+    return primitive
+
+
+def bz_to_toml(grid: list, irr_q: np.ndarray) -> tomlkit.table:
+    bz = tomlkit.table()
+    bz.add("grid", grid)
+    bz.add("irreducible_q", irr_q.tolist())
+    bz["irreducible_q"].multiline(True)
+    return bz
+
+
+def structure_from_toml(data: dict) -> Structure:
+    """Reconstructs a pymatgen Structure from TOML data."""
+    lattice = Lattice(np.array(data["lattice"]))
+    species = data["species"]
+    frac_coords = np.array(data["frac_coords"])
+    return Structure(lattice, species, frac_coords)
+
+
+def write_quesadilla_toml(prim, grid, irr_q, T_matrices, sc_size, comm_q, output_path):
+    doc = tomlkit.document()
+    doc.add("primitive", structure_to_toml(prim))
+    doc.add("brillouin_zone", bz_to_toml(grid, irr_q))
+
+    supercells = tomlkit.aot()  # Array of Tables
+    output_file = os.path.join(output_path, "quesadilla.toml")
+    for i, (T, sz, q) in enumerate(zip(T_matrices, sc_size, comm_q)):
+        sc_table = tomlkit.table()
+        sc_table.add("index", i + 1)
+        sc_table.add("size", int(sz))
+        sc_table.add("commensurate_q", q.tolist())
+        sc_table.add("matrix", T.tolist())
+        sc_table["matrix"].multiline(True)
+        supercells.append(sc_table)
+
+    doc.add("supercells", supercells)
     with open(output_file, "w") as f:
-        yaml.dump(
-            {"supercells": supercells}, f, sort_keys=False, default_flow_style=False
-        )
-
+        f.write(doc.as_string())
     print(f"Supercells written to {output_file}")
+
+
+def read_quesadilla_toml(input_file: str):
+    with open(input_file, "rb") as f:
+        data = tomli.load(f)
+
+    # Read primitive structure
+    prim = structure_from_toml(data["primitive"])
+    # Read BZ Data
+    bz = data["brillouin_zone"]
+    grid = bz["grid"]
+    irr_q = np.array(bz["irreducible_q"])
+    # Read supercells
+    supercells = data["supercells"]
+    T_matrices = np.array([sc["matrix"] for sc in supercells])
+    sc_size = np.array([sc["size"] for sc in supercells])
+    comm_q = np.array([sc["commensurate_q"] for sc in supercells])
+    return prim, grid, irr_q, T_matrices, sc_size, comm_q

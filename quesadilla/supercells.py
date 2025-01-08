@@ -157,7 +157,7 @@ def get_T_matrices(qpoints: np.ndarray) -> np.ndarray:
 
 
 def get_supercells(
-    prim: Structure, grid: ArrayLike, reduce: bool = True, trim: bool = False
+    prim: Structure, irr_q, reduce: bool = True, trim: bool = False
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Generate nondiagonal supercells commensurate with the IBZ.
@@ -179,8 +179,9 @@ def get_supercells(
         q_comm[i] is the q-vector (frac coords) commensurate with T_mat[i]
     """
 
-    q_comm = get_qpoints(prim, grid)
-    T_matrices = get_T_matrices(q_comm)
+    T_matrices = get_T_matrices(irr_q)
+    # TODO: recompute all q-points commensurate with a supercell, not just one
+    q_comm = irr_q
     for i, T in enumerate(T_matrices):
         ndsc_lattice = np.dot(T, prim.lattice.matrix)
         ndsc_lattice = minkowski_reduce(ndsc_lattice)
@@ -311,7 +312,7 @@ def minkowski_reduce(vecs: np.ndarray) -> np.ndarray:
     # We'll keep iterating until no more changes happen
     while True:
         # Save a copy of the current vectors so we can restore each row after testing
-        vecs_snapshot = vecs.copy()
+        # vecs_snapshot = vecs.copy()
 
         # 1) Check linear combinations involving two vectors
         #    We do this by zeroing out each row in turn, calling reduce_vec, then restoring.
