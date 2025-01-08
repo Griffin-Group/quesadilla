@@ -8,6 +8,7 @@ examples/**/quesadilla.yaml
 examples/**/quesadilla.toml
 examples/**/POSCAR_symm
 *.swp
+POSCAR_symm
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

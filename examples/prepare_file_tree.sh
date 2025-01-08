@@ -1,7 +1,5 @@
 #!/bin/bash
 
-alias vaspVeryClean='rm -f OSZICAR PCDAT OUTCAR IBZKPT EIGENVAL CONTCAR DOSCAR CHG CHGCAR XDATCAR WAVECAR REPORT job.out job.err vasprun.xml vaspout.h5 PROCAR WAVEDER SOURCEPOT XCPOT dg.md job_details.out &> /dev/null'
-
 # Loop over directories sc-1 to sc-5
 for i in {1..8}; do
     dir="sc-$i"
@@ -10,8 +8,6 @@ for i in {1..8}; do
         cd "$dir" || exit
         
         rm POSCAR-* SPOSCAR *.hdf5 FORCE_SETS &> /dev/null
-        # Run the phonopy command
-        cp ../POSCAR .
         phonopy make_disp.conf
         
         # Find all POSCAR-00x files
