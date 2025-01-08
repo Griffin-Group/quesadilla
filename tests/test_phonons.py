@@ -4,7 +4,7 @@ import numpy as np
 import phonopy
 import pytest
 
-import quesadilla.dynmat as dynmat
+from quesadilla.dynmat import NondiagonalPhononCalculator
 
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -19,11 +19,11 @@ def test_phonon_band_comparison(material, threshold):
         threshold (float): Maximum allowed absolute difference in phonon frequencies.
     """
     # Load structures and phonon data
-    root = f"{TEST_DIR}/data/{material}/"
-    # prim = Structure.from_file(f"{root}/POSCAR")
-    T_sc, q_comm = dynmat.read_monserrat(f"{root}/monserrat")
-    nd_phonon = dynmat.get_nd_phonopy(f"{root}", [4, 4, 4], T_sc, q_comm)
-    ref_phonon = phonopy.load(f"{root}/phonopy-diag.yaml")
+    root = os.path.join(TEST_DIR, "data", material)
+    ndsc_calc = NondiagonalPhononCalculator.from_toml(f"{root}/quesadilla.toml")
+    ndsc_calc.run()
+    nd_phonon = ndsc_calc.phonons
+    ref_phonon = phonopy.load(os.path.join(root, "phonopy-diag.yaml"))
 
     # Generate band structures
     ref_phonon.auto_band_structure(npoints=31)

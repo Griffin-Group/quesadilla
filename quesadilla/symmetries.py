@@ -200,7 +200,7 @@ class Symmetrizer:
         self.rtau = espresso_symm.sgam_lr(
             self.at, self.bg, self.nsym, self.s, self.irt, self.tau
         )
-        
+
         # Print some info
         if verbose:
             q = self.structure.lattice.reciprocal_lattice.get_fractional_coords(
@@ -229,7 +229,7 @@ class Symmetrizer:
                 Whether to print the number of q-points in the star and the list of q-points in the star.
             - debug : bool
                 Whether to print debug information from Fortran routines.
-        
+
         Returns:
             ndarray(nq, 3), the q-points in the star in CARTESIAN coordinates / (2 * pi)
         """
@@ -313,6 +313,7 @@ class Symmetrizer:
         """
 
         # Symmetrize the force constants at q
+        aq = np.array(aq, dtype=np.float64, order="F")
         xq = self.get_xq_from_aq(aq)
         fcq = np.array(fcq, dtype=np.complex128, order="F")
         fcq_symm = self.symmetrize_fcq(fcq, xq, verbose)

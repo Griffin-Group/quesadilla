@@ -14,6 +14,8 @@ dependencies = [
     "phonopy",
     "pymatgen",
     "pulp",
+    "tomli",
+    "tomlkit",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -44,7 +46,6 @@ docs = [ # Optional dependencies for building documentation
 dev = [
     "ruff",
     "pytest",
-    "pytest_parametrize_cases",
     "pre-commit",
 ] # Deps for development
 build = ["build", "twine", "wheel"] # Deps for building and publishing
