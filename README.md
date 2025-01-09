@@ -24,23 +24,3 @@ python -m pip install --no-build-isolation --editable .
 
 # Usage
 Currently the CLI does not exist, but the package is fully usable via the python API (which needs quite a bit of work, especially to support IO for all the codes phonopy supports besides VASP). See the `examples` directory for a Silicon example on a 4x4x4 $q$-grid. You only need to read the Jupyter notebook and follow the instructions.
-
-# TODO:
-
-- [x] Meson build system for the Fortran extension
-- [x] Documentaton with Mkdocs
-- [x] Automatic testing GitHub actions
-- [x] Fix issue with nonsymmorphic space groups
-- [x] Symmetrize the dynamical matrix using QE instead of spglib
-- [x] Implement your Minkowski reduction and ensure it replicates Monserrat's results
-- [x] Add unit tests
-- [x] Refactor FORTRAN modules
-- [x] Write calculation data to a log file of some kind
-- [ ] Fix LAPACK issue with GitHub actions
-- [ ] Significant code cleanup and refactoring
-- [ ] Implement autoGR functionality for k-grids
-- [ ] Implement CLI
-- [ ] Documentation
-- [ ] Implement magnetism
-- [ ] Remove pmg as a dependency (use only phonopy + spglib)
-- [ ] Test integer linear programming reduction of necessary supercells
