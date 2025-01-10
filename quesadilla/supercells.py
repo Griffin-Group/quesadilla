@@ -6,6 +6,7 @@ from typing import Tuple
 
 import numpy as np
 import pulp
+import spglib
 import tomli
 import tomlkit
 from numpy.typing import ArrayLike
@@ -31,15 +32,12 @@ class SupercellGenerator:
         # TODO: should take Phonopy primitive as input
         # TODO: should create Phonopy supercell from grid and prim
         self.primitive, self.supercell = struct_to_phonopy(self._pmg_prim, grid)
-        self.masses = self.primitive.masses
-        self.frac_coords = self.primitive.scaled_positions
+        # self.masses = self.primitive.masses
+        # self.frac_coords = self.primitive.scaled_positions
+        # self.primitive.symbols
         # Setup BZ data
         self.grid = grid
-        if q_ibz is None:
-            self.q_ibz = get_ibz(self._pmg_prim, self.grid)
-        else:
-            self.q_ibz = np.array(q_ibz)
-
+        self.q_ibz = self.get_ibz() if q_ibz is None else np.array(q_ibz)
         # Setup supercell data
         self.sc_matrices = np.array(sc_matrices) if sc_matrices is not None else None
         self.sc_sizes = np.array(sc_sizes) if sc_sizes is not None else None
@@ -56,6 +54,43 @@ class SupercellGenerator:
             print("NOTE: The primitive structure has been standardized and dumped to")
             print(f"      {prime_filename}")
         return prim
+
+    def get_ibz(
+        self,
+    ) -> np.ndarray:
+        """
+        Gets the q points in a structures IBZ. The output is sorted for consistency.
+
+        Parameters:
+        - primitive: phonopy.structure.cells.Primitive
+            The input structure (primitive cell, assumed to be standardized).
+        - grid: array-like
+            The grid of q points (e.g., [4, 4, 4] for a 4x4x4 grid).
+
+        Returns:
+        - qpoints: numpy.ndarray
+            The q points in the IBZ (fractional coordinates, sorted).
+        """
+        grid = np.array(self.grid)
+        # Contruct the SPG-style cell tuple
+        # https://spglib.readthedocs.io/en/stable/python-interface.html#crystal-structure-cell
+        mapping = {
+            element: i + 1 for i, element in enumerate(set(self.primitive.symbols))
+        }
+        zs = [mapping[element] for element in self.primitive.symbols]
+        cell = (
+            tuple(map(tuple, self.primitive.cell.tolist())),
+            tuple(map(tuple, self.primitive.scaled_positions.tolist())),
+            tuple(zs),
+        )
+        # Get irr q-points
+        mapping, all_qpoints = spglib.get_ir_reciprocal_mesh(
+            grid, cell, is_shift=np.zeros(3), symprec=1e-5
+        )
+        irr_qpoints = np.array([all_qpoints[idx] / grid for idx in np.unique(mapping)])
+
+        # Sort by (z, y, x) for consistency
+        return irr_qpoints[np.lexsort(irr_qpoints.T)]
 
     def _structure_to_toml(self) -> tomlkit.table:
         """
@@ -296,29 +331,6 @@ def convert_to_fraction_array(arr):
             result[i, 1, j] = frac.denominator
 
     return result
-
-
-def get_ibz(
-    structure: Structure,
-    grid: ArrayLike,
-) -> np.ndarray:
-    """
-    Gets the q points in a structures IBZ. The output is sorted for consistency.
-
-    Parameters:
-    - structure: pymatgen.Structure
-        The input structure (primitive cell).
-    - grid: array-like
-        The grid of q points (e.g., [4, 4, 4] for a 4x4x4 grid).
-
-    Returns:
-    - qpoints: numpy.ndarray
-        The q points in the IBZ (fractional coordinates).
-    """
-    # TODO: should use spglib with phonopy primitive cell
-    sga = SpacegroupAnalyzer(structure)
-    qpoints = np.array([q[0] for q in sga.get_ir_reciprocal_mesh(grid)])
-    return qpoints[np.lexsort(qpoints.T)]
 
 
 def get_T_matrices(qpoints: np.ndarray) -> np.ndarray:
