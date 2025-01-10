@@ -133,7 +133,7 @@ def generate_files(
     sc_gen.generate_supercells()
 
     T_matrices, sc_size, comm_q = sc_gen.sc_matrices, sc_gen.sc_sizes, sc_gen.q_comm
-    prim = sc_gen.primitive
+    prim = sc_gen._pmg_prim
     for i, (T, sz, q) in enumerate(zip(T_matrices, sc_size, comm_q)):
         # Print the supercell information
         if verbose:

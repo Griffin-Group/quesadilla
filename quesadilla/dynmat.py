@@ -11,7 +11,7 @@ from phonopy.harmonic.dynmat_to_fc import (
 )
 
 import quesadilla.symmetries as symmetries
-from quesadilla.supercells import SupercellGenerator, struct_to_phonopy
+from quesadilla.supercells import SupercellGenerator
 
 
 class NondiagonalPhononCalculator:
@@ -35,6 +35,7 @@ class NondiagonalPhononCalculator:
         Returns:
             A NondiagonalPhononCalculator object
         """
+        # TODO: move to CLI (maybe?)
         sc_gen = SupercellGenerator.from_toml(toml_file)
         root = os.path.dirname(toml_file)
         nd_phonons = cls._parse_ndsc_phonons(root, sc_gen)
@@ -48,7 +49,7 @@ class NondiagonalPhononCalculator:
 
         ## Unfold the FCs to the full star of each q point
         full_fcq = {}
-        symmetrizer = symmetries.Symmetrizer(self.sc_gen.primitive)
+        symmetrizer = symmetries.Symmetrizer(self.sc_gen._pmg_prim)
         for q, D in irr_fcq.items():
             full_fcq |= symmetrizer.get_fcq_in_star(D, q, verbose=verbose)
 
@@ -63,6 +64,7 @@ class NondiagonalPhononCalculator:
             root: Path to the directory containing the supercells
             sc_gen: SupercellGenerator object
         """
+        # TODO: move to CLI (maybe?)
         n_sc = len([d for d in os.listdir(root) if d.startswith("sc-")])
         assert n_sc == len(sc_gen.sc_matrices), "Number of supercells does not match"
         phonons = [
@@ -88,7 +90,6 @@ class NondiagonalPhononCalculator:
     ) -> dict[tuple[float, float, float], np.ndarray]:
         """
         Gets the Fourier transformed force constant matrices
-        TODO: should take a list of force constants not path to the files!
         """
         dynmats = {}
         for i, p in enumerate(self.nd_phonons):
@@ -121,11 +122,10 @@ class NondiagonalPhononCalculator:
             sc_gen: SupercellGenerator object
             full_fcq: The full force constant matrix
         """
-        primitive, supercell = struct_to_phonopy(
-            self.sc_gen.primitive, self.sc_gen.grid
-        )
         print("Creating the Phonopy object...")
-        nd_phonon = Phonopy(primitive, supercell_matrix=np.diag(self.sc_gen.grid))
+        nd_phonon = Phonopy(
+            self.sc_gen.primitive, supercell_matrix=np.diag(self.sc_gen.grid)
+        )
         print("Fourier transforming the force constants back to real space...")
         nd_phonon.force_constants = self._fcq_to_fcr(
             full_fcq,
@@ -141,15 +141,12 @@ class NondiagonalPhononCalculator:
         Fourier transform the force constants on the full q-grid to real
         space.
         """
-        primitive, supercell = struct_to_phonopy(
-            self.sc_gen.primitive, self.sc_gen.grid
-        )
         all_q = np.array(list(fcq.keys()))
         print(f"Found {len(all_q)} q-points in the full BZ")
         dynmat = np.array([self._fcq_to_dynmat(fcq[tuple(q)], q) for q in all_q])
         d2f = DynmatToForceConstants(
-            primitive,
-            supercell,
+            self.sc_gen.primitive,
+            self.sc_gen.supercell,
             is_full_fc=True,
         )
         d2f.commensurate_points = all_q
@@ -173,13 +170,12 @@ class NondiagonalPhononCalculator:
             The Fourier transformed force constant matrix (3*nat x 3*nat)
         """
         N = len(self.sc_gen.primitive)
-        masses = np.array(
-            [s.species.elements[0].atomic_mass for s in self.sc_gen.primitive]
-        )
         D_blocks = D.reshape(N, 3, N, 3).swapaxes(1, 2)
+        masses = self.sc_gen.primitive.masses
         for i, j in itertools.product(range(N), range(N)):
-            r_i = self.sc_gen.primitive[i].frac_coords
-            r_j = self.sc_gen.primitive[j].frac_coords
+            # Get fractional coordinates
+            r_i = self.sc_gen.primitive.scaled_positions[i]
+            r_j = self.sc_gen.primitive.scaled_positions[j]
             D_blocks[i, j] *= (
                 np.exp(1j * 2 * np.pi * np.dot(q, r_i))
                 * np.exp(-1j * 2 * np.pi * np.dot(q, r_j))
@@ -202,13 +198,12 @@ class NondiagonalPhononCalculator:
             The dynamical matrix (3*nat x 3*nat)
         """
         N = len(self.sc_gen.primitive)
-        masses = np.array(
-            [s.species.elements[0].atomic_mass for s in self.sc_gen.primitive]
-        )
+        masses = self.sc_gen.primitive.masses
         D_blocks = fcq.reshape(N, 3, N, 3).swapaxes(1, 2)
         for i, j in itertools.product(range(N), range(N)):
-            r_i = self.sc_gen.primitive[i].frac_coords
-            r_j = self.sc_gen.primitive[j].frac_coords
+            # Get fractional coordinates
+            r_i = self.sc_gen.primitive.scaled_positions[i]
+            r_j = self.sc_gen.primitive.scaled_positions[j]
             D_blocks[i, j] *= (
                 np.exp(-1j * 2 * np.pi * np.dot(q, r_i))
                 * np.exp(1j * 2 * np.pi * np.dot(q, r_j))

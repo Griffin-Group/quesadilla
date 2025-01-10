@@ -18,6 +18,8 @@ class Symmetrizer:
             threshold: Numerical threshold for symmetry detection, defaults to 1e-5.
         """
 
+        # TODO: this whole constructor should be
+        # refactored to use a Phonopy PrimitiveCell object
         # Structure
         self.structure = structure
 
@@ -81,6 +83,7 @@ class Symmetrizer:
             ndarray(3)
                 The q-point in Cartesian coordinates / (2*pi).
         """
+        # TODO: this should just do matrix multiplication with Phonopy structure
         return np.array(
             self.structure.lattice.reciprocal_lattice.get_cartesian_coords(aq)
             / (2 * np.pi),
@@ -100,7 +103,7 @@ class Symmetrizer:
             ndarray(3)
                 The q-point in fractional coordinates.
         """
-
+        # TODO: this should just do matrix multiplication with Phonopy structure
         return np.array(
             self.structure.lattice.reciprocal_lattice.get_fractional_coords(
                 xq * (2 * np.pi)
@@ -203,14 +206,10 @@ class Symmetrizer:
 
         # Print some info
         if verbose:
-            q = self.structure.lattice.reciprocal_lattice.get_fractional_coords(
-                xq * 2 * np.pi
-            )
+            q = self.get_aq_from_xq(xq)
             print(f"Symmetries of the small group of q = {np.round(q, 5)}:", self.nsymq)
             if self.minus_q:
-                gimq = self.structure.lattice.reciprocal_lattice.get_fractional_coords(
-                    self.gimq * 2 * np.pi
-                )
+                gimq = self.get_aq_from_xq(self.gimq)
                 print(
                     (
                         f"in addition sym. q -> -q+G, with irotmq = {self.irotmq}"

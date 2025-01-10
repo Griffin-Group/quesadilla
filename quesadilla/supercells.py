@@ -27,12 +27,16 @@ class SupercellGenerator:
         q_comm: np.ndarray = None,
     ):
         # Setup primitive structure
-        self.primitive = self.get_standard_prim(structure)
-
+        self._pmg_prim = self.get_standard_prim(structure)
+        # TODO: should take Phonopy primitive as input
+        # TODO: should create Phonopy supercell from grid and prim
+        self.primitive, self.supercell = struct_to_phonopy(self._pmg_prim, grid)
+        self.masses = self.primitive.masses
+        self.frac_coords = self.primitive.scaled_positions
         # Setup BZ data
         self.grid = grid
         if q_ibz is None:
-            self.q_ibz = get_ibz(self.primitive, self.grid)
+            self.q_ibz = get_ibz(self._pmg_prim, self.grid)
         else:
             self.q_ibz = np.array(q_ibz)
 
@@ -57,16 +61,17 @@ class SupercellGenerator:
         """
         Convert the primitive structure to a TOML table.
         """
-        if self.primitive is None:
+        # TODO: should use a Phonopy structure
+        if self._pmg_prim is None:
             raise ValueError("Primitive structure must be set.")
 
         primitive_toml = tomlkit.table()
         primitive_toml.add(
-            "lattice", np.round(self.primitive.lattice.matrix, 10).tolist()
+            "lattice", np.round(self._pmg_prim.lattice.matrix, 10).tolist()
         )
-        primitive_toml.add("species", [site.species_string for site in self.primitive])
+        primitive_toml.add("species", [site.species_string for site in self._pmg_prim])
         primitive_toml.add(
-            "frac_coords", np.round(self.primitive.frac_coords, 10).tolist()
+            "frac_coords", np.round(self._pmg_prim.frac_coords, 10).tolist()
         )
         primitive_toml["lattice"].multiline(True)
         primitive_toml["frac_coords"].multiline(True)
@@ -154,6 +159,7 @@ class SupercellGenerator:
     @staticmethod
     def structure_from_toml(data: dict) -> Structure:
         """Reconstructs a pymatgen Structure from TOML data."""
+        # TODO: should reconstruct Phonopy structure
         lattice = Lattice(np.array(data["lattice"]))
         species = data["species"]
         frac_coords = np.array(data["frac_coords"])
@@ -176,11 +182,11 @@ class SupercellGenerator:
         # TODO: recompute all q-points commensurate with a supercell, not just one
         q_comm = np.array([[q] for q in self.q_ibz])
         for i, T in enumerate(T_matrices):
-            ndsc_lattice = np.dot(T, self.primitive.lattice.matrix)
+            ndsc_lattice = np.dot(T, self._pmg_prim.lattice.matrix)
             ndsc_lattice = minkowski_reduce(ndsc_lattice)
             T = np.dot(
                 ndsc_lattice,
-                self.primitive.lattice.reciprocal_lattice.matrix.T / 2 / np.pi,
+                self._pmg_prim.lattice.reciprocal_lattice.matrix.T / 2 / np.pi,
             )
             T_matrices[i] = ensure_positive_det(np.rint(T).astype(int))
         self.sc_matrices = np.array(T_matrices)
@@ -309,6 +315,7 @@ def get_ibz(
     - qpoints: numpy.ndarray
         The q points in the IBZ (fractional coordinates).
     """
+    # TODO: should use spglib with phonopy primitive cell
     sga = SpacegroupAnalyzer(structure)
     qpoints = np.array([q[0] for q in sga.get_ir_reciprocal_mesh(grid)])
     return qpoints[np.lexsort(qpoints.T)]
