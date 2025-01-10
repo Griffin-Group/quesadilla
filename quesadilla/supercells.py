@@ -217,11 +217,11 @@ class SupercellGenerator:
         # TODO: recompute all q-points commensurate with a supercell, not just one
         q_comm = np.array([[q] for q in self.q_ibz])
         for i, T in enumerate(T_matrices):
-            ndsc_lattice = np.dot(T, self._pmg_prim.lattice.matrix)
+            ndsc_lattice = np.dot(T, self.primitive.cell)
             ndsc_lattice = minkowski_reduce(ndsc_lattice)
             T = np.dot(
                 ndsc_lattice,
-                self._pmg_prim.lattice.reciprocal_lattice.matrix.T / 2 / np.pi,
+                np.linalg.inv(self.primitive.cell),
             )
             T_matrices[i] = ensure_positive_det(np.rint(T).astype(int))
         self.sc_matrices = np.array(T_matrices)
