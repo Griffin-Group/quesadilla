@@ -27,18 +27,6 @@ irreducible_q = [
 
 [[supercells]]
 index = 1
-size = 1
-commensurate_q = [
-    [0.0, 0.0, 0.0],
-]
-matrix = [
-    [1, 0, 0],
-    [0, 1, 0],
-    [0, 0, 1],
-]
-
-[[supercells]]
-index = 2
 size = 4
 commensurate_q = [
     [0.0, 0.0, 0.0],
@@ -52,20 +40,7 @@ matrix = [
 ]
 
 [[supercells]]
-index = 3
-size = 2
-commensurate_q = [
-    [0.0, 0.0, 0.0],
-    [0.5, 0.0, 0.0],
-]
-matrix = [
-    [2, 0, 0],
-    [0, 1, 0],
-    [0, 0, 1],
-]
-
-[[supercells]]
-index = 4
+index = 2
 size = 4
 commensurate_q = [
     [0.0, 0.0, 0.0],
@@ -79,7 +54,7 @@ matrix = [
 ]
 
 [[supercells]]
-index = 5
+index = 3
 size = 4
 commensurate_q = [
     [0.0, 0.0, 0.0],
@@ -92,20 +67,7 @@ matrix = [
 ]
 
 [[supercells]]
-index = 6
-size = 2
-commensurate_q = [
-    [0.0, 0.0, 0.0],
-    [0.5, 0.5, 0.0],
-]
-matrix = [
-    [1, 1, 0],
-    [-1, 1, 0],
-    [0, 0, 1],
-]
-
-[[supercells]]
-index = 7
+index = 4
 size = 4
 commensurate_q = [
     [0.0, 0.0, 0.0],
@@ -119,7 +81,7 @@ matrix = [
 ]
 
 [[supercells]]
-index = 8
+index = 5
 size = 4
 commensurate_q = [
     [0.0, 0.0, 0.0],
@@ -132,7 +94,7 @@ matrix = [
 ]
 
 [[supercells]]
-index = 9
+index = 6
 size = 4
 commensurate_q = [
     [0.0, 0.0, 0.0],
@@ -142,17 +104,4 @@ matrix = [
     [1, 1, 0],
     [1, -1, 0],
     [0, 1, -2],
-]
-
-[[supercells]]
-index = 10
-size = 2
-commensurate_q = [
-    [0.0, 0.0, 0.0],
-    [0.5, 0.5, 0.5],
-]
-matrix = [
-    [1, 0, 1],
-    [0, 1, 1],
-    [0, -1, 1],
 ]

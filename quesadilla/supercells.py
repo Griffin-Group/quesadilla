@@ -190,7 +190,7 @@ class SupercellGenerator:
         )
 
     def generate_supercells(
-        self, minkowski_reduce: bool = True, trim: bool = False
+        self, minkowski_reduce: bool = True, minimize_supercells: bool = False
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Generate nondiagonal supercells commensurate with the IBZ.
@@ -209,14 +209,28 @@ class SupercellGenerator:
             )
 
         self.sc_sizes = np.array([np.linalg.det(T) for T in self.sc_matrices])
-        # TODO: recompute all q-points commensurate with a supercell, not just one
-        # self.q_comm = np.array([[q] for q in self.q_ibz])
         self.q_comm = [
             np.array([q for q in self.q_ibz if np.allclose(np.rint(T @ q), T @ q)])
             for T in self.sc_matrices
         ]
 
+        if minimize_supercells:
+            print(
+                f"We have {len(self.sc_matrices)} q-points in IBZ necessitating "
+                f"{len(self.sc_matrices)} supercells with total size "
+                f"{np.sum(self.sc_sizes)}"
+            )
+            self._pick_smallest_supercells()
+            print(
+                f"After minimization, we only need"
+                f"{len(self.sc_matrices)} supercells with total size "
+                f"{np.sum(self.sc_sizes)}"
+            )
+
     def _get_ndsc_matrices(self) -> np.ndarray:
+        """
+        Generate nondiagonal supercell matrices commensurate with the IBZ.
+        """
         qpoints_frac = convert_to_fraction_array(self.q_ibz)
         sc_matrices = np.zeros((self.q_ibz.shape[0], 3, 3), dtype=int)
 
@@ -224,6 +238,48 @@ class SupercellGenerator:
             sc_matrices[i, :] = find_nondiagonal(Q)
 
         return sc_matrices
+
+    def _pick_smallest_supercells(self) -> np.ndarray[bool]:
+        """
+        Solves the set cover problem with associated supercell sizes, selecting the
+        smallest set of supercells that cover all q points in the IBZ while minimizing
+        the total size of the selected supercells.
+
+        Notes:
+        ------
+        This function uses integer linear programming (ILP) to ensure an optimal
+        selection of supercells with the smallest total size while covering all
+        q-points. The function requires the `pulp` library to solve the ILP problem.
+        """
+        nq = len(self.sc_sizes)
+        # commensurate[i, j] is True if supercell `i` is commensurate with q-point `j`.
+        commensurate = np.full((nq, nq), False, dtype=bool)
+        for i, T in enumerate(self.sc_matrices):
+            commensurate[i, :] = [np.all(T @ q == np.round(T @ q)) for q in self.q_ibz]
+
+        # Create a problem instance
+        prob = pulp.LpProblem("PickSmallestSupercells", pulp.LpMinimize)
+
+        # Create binary variables for each supercell
+        x = [pulp.LpVariable(f"x_{i}", cat="Binary") for i in range(nq)]
+
+        # Objective function: Minimize the total supercell size
+        prob += pulp.lpSum(self.sc_sizes[i] * x[i] for i in range(nq))
+
+        # Constraints: Ensure each q-point is covered by at least one bin
+        for j in range(nq):
+            prob += pulp.lpSum(commensurate[i, j] * x[i] for i in range(nq)) >= 1
+
+        # Solve the problem
+        prob.solve(pulp.PULP_CBC_CMD(msg=False))
+
+        # Get the selected supercells and total size
+        selected_cells = [int(pulp.value(x[i])) for i in range(nq)]
+        selected_cells = [i for i in range(nq) if selected_cells[i] == 1]
+
+        self.sc_matrices = self.sc_matrices[selected_cells]
+        self.sc_sizes = self.sc_sizes[selected_cells]
+        self.q_comm = [self.q_comm[i] for i in selected_cells]
 
 
 # Utility functions for supercell generation
@@ -312,63 +368,6 @@ def find_nondiagonal(Q: np.ndarray) -> np.ndarray:
 
 
 # Functions for minimizing number of cells
-def pick_smallest_supercells(
-    commensurate: np.ndarray[bool], sc_sizes: np.ndarray[int], verbose: bool = False
-) -> np.ndarray[bool]:
-    """
-    Solves the set cover problem with associated supercell sizes, selecting the
-    smallest set of supercells that cover all q points.
-
-    Parameters:
-    -----------
-    commensurate : numpy.ndarray
-        A boolean NxN array where each row corresponds to a supercell and
-        each column corresponds to a q points. An entry commensurate[i, j] is True if supercell `i` is commensurate with q-point `j`.
-
-    sc_sizes : numpy.ndarray
-        A 1D array of length N where each entry is the size of the corresponding
-        supercell.
-
-    verbose : bool
-        Whether to print the solver output.
-
-    Returns:
-    --------
-    selected_cells : list of int
-        A list of indices of the selected supercells.
-
-    total_size : int or float
-        The total size of the selected supercells.
-
-    Notes:
-    ------
-    This function uses integer linear programming (ILP) to ensure an optimal selection
-    of supercells with the smallest total size while covering all q-points.
-    The function requires the `pulp` library to solve the ILP problem.
-    """
-    N = len(sc_sizes)
-
-    # Create a problem instance
-    prob = pulp.LpProblem("PickSmallestSupercells", pulp.LpMinimize)
-
-    # Create binary variables for each supercell
-    x = [pulp.LpVariable(f"x_{i}", cat="Binary") for i in range(N)]
-
-    # Objective function: Minimize the total supercell size
-    prob += pulp.lpSum(sc_sizes[i] * x[i] for i in range(N))
-
-    # Constraints: Ensure each q-point is covered by at least one bin
-    for j in range(N):
-        prob += pulp.lpSum(commensurate[i, j] * x[i] for i in range(N)) >= 1
-
-    # Solve the problem
-    prob.solve(pulp.PULP_CBC_CMD(msg=False))
-
-    # Get the selected supercells and total size
-    selected_cells = [int(pulp.value(x[i])) for i in range(N)]
-    selected_cells = [i for i in range(N) if selected_cells[i] == 1]
-
-    return selected_cells
 
 
 # Minkowski reduction functions

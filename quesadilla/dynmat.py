@@ -65,7 +65,9 @@ class NondiagonalPhononCalculator:
             sc_gen: SupercellGenerator object
         """
         # TODO: move to CLI (maybe?)
-        n_sc = len([d for d in os.listdir(root) if d.startswith("sc-")])
+        n_sc = len(
+            [d for d in os.listdir(root) if d.startswith("sc-") and d[3:].isdigit()]
+        )
         assert n_sc == len(sc_gen.sc_matrices), "Number of supercells does not match"
         phonons = [
             phonopy.load(
