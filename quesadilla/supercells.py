@@ -190,7 +190,7 @@ class SupercellGenerator:
         )
 
     def generate_supercells(
-        self, reduce: bool = True, trim: bool = False
+        self, minkowski_reduce: bool = True, trim: bool = False
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Generate nondiagonal supercells commensurate with the IBZ.
@@ -202,20 +202,42 @@ class SupercellGenerator:
             Whether to trim the supercells using ILP (default: False, broken).
         """
 
-        T_matrices = get_T_matrices(self.q_ibz)
-        # TODO: recompute all q-points commensurate with a supercell, not just one
-        q_comm = np.array([[q] for q in self.q_ibz])
-        for i, T in enumerate(T_matrices):
-            ndsc_lattice = np.dot(T, self.primitive.cell)
-            ndsc_lattice = minkowski_reduce(ndsc_lattice)
-            T = np.dot(
-                ndsc_lattice,
-                np.linalg.inv(self.primitive.cell),
+        self.sc_matrices = self._get_ndsc_matrices()
+        if minkowski_reduce:
+            self.sc_matrices = np.array(
+                [minkowski_reduce_sc(T, self.primitive.cell) for T in self.sc_matrices]
             )
-            T_matrices[i] = ensure_positive_det(np.rint(T).astype(int))
-        self.sc_matrices = np.array(T_matrices)
-        self.sc_sizes = np.array([np.linalg.det(T) for T in T_matrices])
-        self.q_comm = q_comm
+
+        self.sc_sizes = np.array([np.linalg.det(T) for T in self.sc_matrices])
+        # TODO: recompute all q-points commensurate with a supercell, not just one
+        self.q_comm = np.array([[q] for q in self.q_ibz])
+
+    def _get_ndsc_matrices(self) -> np.ndarray:
+        qpoints_frac = convert_to_fraction_array(self.q_ibz)
+        sc_matrices = np.zeros((self.q_ibz.shape[0], 3, 3), dtype=int)
+
+        for i, Q in enumerate(qpoints_frac):
+            sc_matrices[i, :] = find_nondiagonal(Q)
+
+        return sc_matrices
+
+
+# Utility functions for supercell generation
+def convert_to_fraction_array(arr: np.ndarray) -> np.ndarray:
+    """
+    Takes a numpy array of floats and converts them to fractions.
+
+    The output array has shape (N, 2, M) where N is the number of rows in the input array and M is the number of columns. The second dimension is used to store the numerator and denominator of the fraction, respectively.
+    """
+    result = np.empty((arr.shape[0], 2, arr.shape[1]), dtype=int)
+
+    for i in range(arr.shape[0]):
+        for j in range(arr.shape[1]):
+            frac = Fraction(arr[i, j]).limit_denominator()
+            result[i, 0, j] = frac.numerator
+            result[i, 1, j] = frac.denominator
+
+    return result
 
 
 def find_integers(nums, g23, g12, g31, g123):
@@ -257,7 +279,7 @@ def find_integers(nums, g23, g12, g31, g123):
     return p, q, r
 
 
-def find_nondiagonal(Q):
+def find_nondiagonal(Q: np.ndarray) -> np.ndarray:
     """
     Nondiagonal supercell, based on [Phys. Rev. B 92, 184301]
     This function is copied from QEPlayground
@@ -285,30 +307,10 @@ def find_nondiagonal(Q):
     return np.array([[S_11, S_12, S_13], [0, S_22, S_23], [0, 0, S_33]])
 
 
-def convert_to_fraction_array(arr):
-    result = np.empty((arr.shape[0], 2, arr.shape[1]), dtype=int)
-
-    for i in range(arr.shape[0]):
-        for j in range(arr.shape[1]):
-            frac = Fraction(arr[i, j]).limit_denominator()
-            result[i, 0, j] = frac.numerator
-            result[i, 1, j] = frac.denominator
-
-    return result
-
-
-def get_T_matrices(qpoints: np.ndarray) -> np.ndarray:
-    qpoints_frac = convert_to_fraction_array(qpoints)
-    T_matrices = np.zeros((qpoints.shape[0], 3, 3), dtype=int)
-
-    # pymatgen uses different convention, need transpose
-    for i, Q in enumerate(qpoints_frac):
-        T_matrices[i, :] = find_nondiagonal(Q)
-
-    return T_matrices
-
-
-def pick_smallest_supercells(commensurate, sc_sizes, verbose=False):
+# Functions for minimizing number of cells
+def pick_smallest_supercells(
+    commensurate: np.ndarray[bool], sc_sizes: np.ndarray[int], verbose: bool = False
+) -> np.ndarray[bool]:
     """
     Solves the set cover problem with associated supercell sizes, selecting the
     smallest set of supercells that cover all q points.
@@ -365,9 +367,30 @@ def pick_smallest_supercells(commensurate, sc_sizes, verbose=False):
     return selected_cells
 
 
-def ensure_positive_det(matrix: np.ndarray) -> np.ndarray:
+# Minkowski reduction functions
+def minkowski_reduce_sc(T, lattice):
     """
-    If the matrix has a negative determinant, this function flips the sign of the row with the most negative entries. Phonopy requires the supercell matrix to have a positive determinant.
+    Reduce a supercell matrix using Minkowski reduction.
+
+    Args:
+        T (numpy.ndarray): Supercell matrix.
+        lattice (numpy.ndarray): Primitive lattice.
+
+    Returns:
+        numpy.ndarray: Minkowski-reduced supercell matrix with positive determinant.
+    """
+    ndsc_lattice = np.dot(T, lattice)
+    ndsc_lattice = mink_reduce(ndsc_lattice)
+    T = np.dot(
+        ndsc_lattice,
+        np.linalg.inv(lattice),
+    )
+    return make_positive_det(np.rint(T).astype(int))
+
+
+def make_positive_det(matrix: np.ndarray) -> np.ndarray:
+    """
+    If the matrix has a negative determinant, this function flips the sign of the row with the most negative entries. Phonopy requires the supercell matrix to have a positive determinant. This doesn't change the q-point that the supercell is commensurate with.
 
     Args:
         matrix (numpy.ndarray): Input square matrix.
@@ -376,125 +399,101 @@ def ensure_positive_det(matrix: np.ndarray) -> np.ndarray:
         numpy.ndarray: Adjusted matrix.
     """
     if np.linalg.det(matrix) < 0:
-        # Calculate the sum of negative entries in each row
-        negative_sums = np.sum(np.minimum(matrix, 0), axis=1)
-
         # Find the row index with the most negative entries
+        negative_sums = np.sum(np.minimum(matrix, 0), axis=1)
         row_to_flip = np.argmin(negative_sums)
-
-        # Flip the sign of the selected row
         matrix[row_to_flip] *= -1
 
     return matrix
 
 
-# TODO: these two functions are written very similarly to
-# the FORTRAN code so it's they're very difficult to understand.
-# Needs a complete rewrite in a pythonic and understandable way.
-def minkowski_reduce(vecs: np.ndarray) -> np.ndarray:
+def mink_reduce(vecs: np.ndarray, tol: float = 1e-7, max_iter: int = 100) -> np.ndarray:
     """
-    Given a set of 3 vectors in 3D space (rows of `vecs`) that might not be
-    Minkowski-reduced, iteratively attempt to Minkowski-reduce them until no
-    further changes occur.
-
-    Minkowski reduction (in 3D) implies:
-      - The first vector is the shortest non-zero vector in the lattice.
-      - Each subsequent vector is the shortest possible that still ensures
-        linear independence with previously chosen vectors.
-
-    This function modifies `vecs` in place until it is Minkowski-reduced.
+    Perform Minkowski reduction on a set of 3 vectors in 3D space.
 
     Parameters
     ----------
     vecs : np.ndarray of shape (3, 3)
-        Each row is a 3D vector. This array is modified in place during the
-        iterative process.
+        Input array where each row represents a 3D vector.
+    tol : float, optional
+        Tolerance for floating-point comparisons, default is 1e-7.
+    max_iter : int, optional
+        Maximum number of iterations, default is 100.
 
     Returns
     -------
     np.ndarray
-        The Minkowski-reduced vectors (same reference as `vecs`).
+        Minkowski-reduced vectors.
     """
-    # Sanity check
     if vecs.shape != (3, 3):
-        raise ValueError("Input array 'vecs' must have shape (3, 3).")
+        raise ValueError("Input must have shape (3, 3).")
 
-    # We'll keep iterating until no more changes happen
+    i = 0
     while True:
-        # Save a copy of the current vectors so we can restore each row after testing
-        # vecs_snapshot = vecs.copy()
+        # Keep track of whether any reduction occurred
+        changed = False
 
-        # 1) Check linear combinations involving two vectors
-        #    We do this by zeroing out each row in turn, calling reduce_vec, then restoring.
-        changed_in_this_pass = False
         for i in range(3):
-            saved_row = vecs[i].copy()  # backup
-            vecs[i] = 0.0  # zero out
-            changed = reduce_vec(vecs)  # see if a reduction is triggered
-            vecs[i] = saved_row  # restore the row
+            temp_vecs = vecs.copy()
+            temp_vecs[i] = 0.0  # Temporarily zero out the i-th vector
+            reduced_vecs = reduce_vectors(temp_vecs, tol)
+            reduced_vecs[i] = vecs[i]  # Restore the i-th vector
 
-            if changed:
-                changed_in_this_pass = True
-                break  # break out of this for-loop to restart the outer loop
+            if not np.allclose(reduced_vecs, vecs):
+                vecs = reduced_vecs
+                changed = True
+                break
 
-        if changed_in_this_pass:
-            continue  # restart from scratch
+        # Check combinations involving all three vectors
+        if not changed:
+            reduced_vecs = reduce_vectors(vecs, tol)
+            if not np.allclose(reduced_vecs, vecs, atol=tol, rtol=0):
+                vecs = reduced_vecs
+                continue
 
-        # 2) Check linear combinations involving all three vectors directly
-        changed = reduce_vec(vecs)
-        if changed:
-            continue  # if it changed, restart
+        # Stop if no changes occurred in this iteration
+        if not changed:
+            break
 
-        # 3) If we got here, no changes occurred in either step -> done
-        break
+        i += 1
+        if i > max_iter:
+            raise RuntimeError("Too many iterations in Minkowski reduction.")
 
     return vecs
 
 
-def reduce_vec(vecs: np.ndarray, tol: float = 1e-7) -> bool:
+def reduce_vectors(vecs: np.ndarray, tol: float) -> np.ndarray:
     """
-    Attempt to reduce three 3D vectors (rows of vecs) by checking specific
-    linear combinations. If any combination is shorter than the current longest
-    vector, replace that longest vector with the shorter one.
+    Reduce three 3D vectors by replacing the longest vector with a linear combination that is shorter.
 
     Parameters
     ----------
     vecs : np.ndarray of shape (3, 3)
-        Each row is a 3D vector: [v1, v2, v3].
-        This array is modified in place if a reduction occurs.
-    tol : float, optional
-        Relative tolerance for floating-point comparisons.
+        Input array where each row is a 3D vector.
+    tol : float
+        Tolerance for floating-point comparisons.
 
     Returns
     -------
-    bool
-        True if a replacement (and thus a reduction) happened.
-        False otherwise.
+    np.ndarray
+        A new array with the reduced vectors if a reduction occurs, or the original array unchanged.
     """
-    # Compute the squared lengths of each of the three rows (vectors)
     lengths_sq = np.sum(vecs**2, axis=1)
-    # Identify the index of the longest vector
     longest_idx = np.argmax(lengths_sq)
     max_len_sq = lengths_sq[longest_idx]
 
-    # Construct the 4 new candidate vectors
-    # Using Python’s array slicing to keep it readable:
     a, b, c = vecs
-    new_vectors = np.array(
-        [
-            a + b - c,
-            a - b + c,
-            -a + b + c,
-            a + b + c,
-        ]
-    )
+    candidates = [
+        a + b - c,
+        a - b + c,
+        -a + b + c,
+        a + b + c,
+    ]
 
-    # Check whether any candidate is strictly shorter (within tolerance)
-    for new_v in new_vectors:
-        new_len_sq = np.dot(new_v, new_v)
-        # Compare with a relative tolerance
-        if new_len_sq < max_len_sq - tol * max_len_sq:
-            # Replace the longest vector with the new shorter one
-            vecs[longest_idx] = new_v
-            return True
-    return False
+    for candidate in candidates:
+        if np.dot(candidate, candidate) < max_len_sq * (1 - tol):
+            new_vecs = vecs.copy()
+            new_vecs[longest_idx] = candidate
+            return new_vecs
+
+    return vecs
