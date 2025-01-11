@@ -1,12 +1,16 @@
 import numpy as np
 from numpy.typing import ArrayLike
-from pymatgen.core.structure import Structure
+from phonopy.structure.cells import Primitive
 
 import quesadilla.espresso_symm as espresso_symm
 
 
 class Symmetrizer:
-    def __init__(self, structure: Structure, threshold: float = 1e-5):
+    def __init__(
+        self,
+        primitive: Primitive,
+        threshold: float = 1e-5,
+    ):
         """Initialize a symmetry analysis object for a structure.
 
         The constructor takes the pymatgen Structure object and sets up attributes in
@@ -14,16 +18,15 @@ class Symmetrizer:
         symmetry routines to compute the Fourier-transformed force constants in the star of a given q-point, and then symmetrize them using space group symmetries.
 
         Args:
-            structure: The crystal structure to analyze.
-            threshold: Numerical threshold for symmetry detection, defaults to 1e-5.
+            primitive: The primitive cell of the structure
+            Threshold: Numerical threshold for symmetry detection, defaults to 1e-5.
         """
-
-        # Structure
-        self.structure = structure
 
         # Define QE Variables with fortran-ready data types
         # NOTE: we use the same names as the QE Fortran routines
-        self.nat = np.intc(len(structure))  # Number of atoms
+        # self.nat = np.intc(len(structure))  # Number of atoms
+        self.nat = np.intc(len(primitive))  # Number of atoms
+        # assert self.nat == self.nat2, "Number of atoms do not match"
         # s(:,:,i) is the i-th symmetry operation. Zeros for missing symmetries
         self.s = np.zeros((3, 3, 48), dtype=np.intc, order="F")
         # irt(i,j) is the index of the atom you get from applying symmetry i to atom j
@@ -50,26 +53,21 @@ class Symmetrizer:
         # Number of symmetries in the star of a q-point
         self.nsymq = np.intc(0)
 
-        # Dictionary of atomic symbol : unique number
-        unique_species = list({site.species_string for site in structure})
-        symbs = {symb: i + 1 for i, symb in enumerate(unique_species)}
-        # Unique species index for each site
-        self.ityp = np.zeros(self.nat, dtype=np.intc)
-        for i, site in enumerate(structure):
-            self.ityp[i] = symbs[site.species_string]
-        # Atomic positions in cartesian coordinates
-        self.tau = np.array(self.structure.cart_coords.T, dtype=np.float64, order="F")
-
-        # Lattice vectors (QE routines expect columns as basis vectors)
-        self.at = np.array(structure.lattice.matrix.T, dtype=np.float64, order="F")
-        # Reciprocal lattice vectors (QE routines expect columns as basis vectors)
-        self.bg = np.array(
-            structure.lattice.reciprocal_lattice.matrix.T / (2 * np.pi),
-            dtype=np.float64,
-            order="F",
+        # Assign unique number to each species
+        mapping = {element: i + 1 for i, element in enumerate(set(primitive.symbols))}
+        self.ityp = np.array(
+            [mapping[element] for element in primitive.symbols], dtype=np.intc
         )
+        # Atoms' cartesian coordinates
+        self.tau = primitive.positions.T
+        # # Lattice vectors (QE routines expect columns as basis vectors)
+        self.at = np.array(primitive.cell.T, dtype=np.float64, order="F")
+        # Reciprocal lattice vectors/(2pi) (QE routines expect columns as basis vectors)
+        recip_lattice = np.linalg.inv(primitive.cell).T * (2 * np.pi)
+        self.bg = np.array(recip_lattice.T / (2 * np.pi), dtype=np.float64, order="F")
 
     def get_xq_from_aq(self, aq: ArrayLike):
+        # sourcery skip: inline-immediately-returned-variable
         """
         Get the q-point in Cartesian coordinates / (2*pi) from a q-point in fractional coordinates.
 
@@ -81,14 +79,10 @@ class Symmetrizer:
             ndarray(3)
                 The q-point in Cartesian coordinates / (2*pi).
         """
-        return np.array(
-            self.structure.lattice.reciprocal_lattice.get_cartesian_coords(aq)
-            / (2 * np.pi),
-            dtype=np.float64,
-            order="F",
-        )
+        return np.dot(aq, self.bg.T)
 
     def get_aq_from_xq(self, xq: ArrayLike):
+        # sourcery skip: inline-immediately-returned-variable
         """
         Get the q-point in fractional coordinates from a q-point in Cartesian coordinates / (2*pi).
 
@@ -100,14 +94,7 @@ class Symmetrizer:
             ndarray(3)
                 The q-point in fractional coordinates.
         """
-
-        return np.array(
-            self.structure.lattice.reciprocal_lattice.get_fractional_coords(
-                xq * (2 * np.pi)
-            ),
-            dtype=np.float64,
-            order="F",
-        )
+        return np.dot(xq, np.linalg.inv(self.bg.T))
 
     def _setup_lattice_symmetries(self, verbose: bool = False):
         """
@@ -203,14 +190,10 @@ class Symmetrizer:
 
         # Print some info
         if verbose:
-            q = self.structure.lattice.reciprocal_lattice.get_fractional_coords(
-                xq * 2 * np.pi
-            )
+            q = self.get_aq_from_xq(xq)
             print(f"Symmetries of the small group of q = {np.round(q, 5)}:", self.nsymq)
             if self.minus_q:
-                gimq = self.structure.lattice.reciprocal_lattice.get_fractional_coords(
-                    self.gimq * 2 * np.pi
-                )
+                gimq = self.get_aq_from_xq(self.gimq)
                 print(
                     (
                         f"in addition sym. q -> -q+G, with irotmq = {self.irotmq}"

@@ -1,59 +1,90 @@
 import math
-import os
 from fractions import Fraction
-from pathlib import Path
 from typing import Tuple
 
 import numpy as np
 import pulp
+import spglib
 import tomli
 import tomlkit
 from numpy.typing import ArrayLike
 from phonopy.structure.atoms import PhonopyAtoms
 from phonopy.structure.cells import Primitive, Supercell
-from pymatgen.core.lattice import Lattice
-from pymatgen.core.structure import Structure
-from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
 
 class SupercellGenerator:
     def __init__(
         self,
-        structure: Structure,
-        grid: list,
+        atoms: PhonopyAtoms,
+        grid: ArrayLike,
         q_ibz: np.ndarray = None,
         sc_matrices: np.ndarray = None,
         sc_sizes: np.ndarray = None,
         q_comm: np.ndarray = None,
     ):
-        # Setup primitive structure
-        self.primitive = self.get_standard_prim(structure)
-
+        # Setup primitive structure and supercell
+        grid = np.array(grid)
+        self.supercell = Supercell(atoms, np.diag(grid))
+        self.primitive = Primitive(self.supercell, np.diag(1 / grid))
         # Setup BZ data
         self.grid = grid
         if q_ibz is None:
-            self.q_ibz = get_ibz(self.primitive, self.grid)
+            self.q_ibz = self.get_ibz()
         else:
-            self.q_ibz = np.array(q_ibz)
+            q_ibz = np.array(q_ibz)
+            q_ibz = q_ibz[np.lexsort(q_ibz.T)]
+            try:
+                assert np.allclose(q_ibz, self.get_ibz())
+            except AssertionError as e:
+                raise ValueError(
+                    "IBZ q-points passed do not match what we expect from the "
+                    "structure's symmetry."
+                ) from e
 
         # Setup supercell data
         self.sc_matrices = np.array(sc_matrices) if sc_matrices is not None else None
         self.sc_sizes = np.array(sc_sizes) if sc_sizes is not None else None
         self.q_comm = np.array(q_comm) if q_comm is not None else None
 
-    def get_standard_prim(self, structure: Structure, root: Path = None) -> Structure:
-        prim = SpacegroupAnalyzer(structure).get_primitive_standard_structure()
-        prim.translate_sites(np.arange(len(prim)), [0.0, 0.0, 0.0], to_unit_cell=True)
-        if structure != prim:
-            if root is None:
-                root = os.getcwd()
-            prime_filename = os.path.join(root, "POSCAR_symm")
-            prim.to(filename=prime_filename, fmt="poscar")
-            print("NOTE: The primitive structure has been standardized and dumped to")
-            print(f"      {prime_filename}")
-        return prim
+    def get_ibz(
+        self,
+    ) -> np.ndarray:
+        """
+        Gets the q points in a structures IBZ. The output is sorted for consistency.
 
-    def _structure_to_toml(self) -> tomlkit.table:
+        Parameters:
+        - primitive: phonopy.structure.cells.Primitive
+            The input structure (primitive cell, assumed to be standardized).
+        - grid: array-like
+            The grid of q points (e.g., [4, 4, 4] for a 4x4x4 grid).
+
+        Returns:
+        - qpoints: numpy.ndarray
+            The q points in the IBZ (fractional coordinates, sorted).
+        """
+        grid = np.array(self.grid)
+        # Contruct the SPG-style cell tuple
+        # https://spglib.readthedocs.io/en/stable/python-interface.html#crystal-structure-cell
+        mapping = {
+            element: i + 1 for i, element in enumerate(set(self.primitive.symbols))
+        }
+        zs = [mapping[element] for element in self.primitive.symbols]
+        cell = (
+            tuple(map(tuple, self.primitive.cell.tolist())),
+            tuple(map(tuple, self.primitive.scaled_positions.tolist())),
+            tuple(zs),
+        )
+        # Get irr q-points
+        # TODO: cell = primitive.totuple()
+        mapping, all_qpoints = spglib.get_ir_reciprocal_mesh(
+            grid, cell, is_shift=np.zeros(3), symprec=1e-5
+        )
+        irr_qpoints = np.array([all_qpoints[idx] / grid for idx in np.unique(mapping)])
+
+        # Sort by (z, y, x) for consistency
+        return irr_qpoints[np.lexsort(irr_qpoints.T)]
+
+    def _atoms_to_toml(self) -> tomlkit.table:
         """
         Convert the primitive structure to a TOML table.
         """
@@ -61,12 +92,10 @@ class SupercellGenerator:
             raise ValueError("Primitive structure must be set.")
 
         primitive_toml = tomlkit.table()
+        primitive_toml.add("lattice", np.round(self.primitive.cell, 12).tolist())
+        primitive_toml.add("species", self.primitive.symbols)
         primitive_toml.add(
-            "lattice", np.round(self.primitive.lattice.matrix, 10).tolist()
-        )
-        primitive_toml.add("species", [site.species_string for site in self.primitive])
-        primitive_toml.add(
-            "frac_coords", np.round(self.primitive.frac_coords, 10).tolist()
+            "frac_coords", np.round(self.primitive.scaled_positions, 12).tolist()
         )
         primitive_toml["lattice"].multiline(True)
         primitive_toml["frac_coords"].multiline(True)
@@ -79,7 +108,7 @@ class SupercellGenerator:
         if self.grid is None or self.q_ibz is None:
             raise ValueError("Grid and irreducible q-points must be set.")
         bz_toml = tomlkit.table()
-        bz_toml.add("grid", self.grid)
+        bz_toml.add("grid", self.grid.tolist())
         bz_toml.add("irreducible_q", self.q_ibz.tolist())
         bz_toml["irreducible_q"].multiline(True)
         return bz_toml
@@ -114,7 +143,7 @@ class SupercellGenerator:
             The output file path.
         """
         doc = tomlkit.document()
-        doc.add("primitive", self._structure_to_toml())
+        doc.add("primitive", self._atoms_to_toml())
         doc.add("brillouin_zone", self._bz_to_toml())
         doc.add("supercells", self._supercells_to_toml())
 
@@ -135,7 +164,7 @@ class SupercellGenerator:
         with open(input_file, "rb") as f:
             data = tomli.load(f)
 
-        primitive = cls.structure_from_toml(data["primitive"])
+        primitive = cls.atoms_from_toml(data["primitive"])
         bz = data["brillouin_zone"]
         grid = bz["grid"]
         irr_q = np.array(bz["irreducible_q"])
@@ -152,12 +181,13 @@ class SupercellGenerator:
         return cls(primitive, grid, irr_q, T_matrices, sc_size, comm_q)
 
     @staticmethod
-    def structure_from_toml(data: dict) -> Structure:
-        """Reconstructs a pymatgen Structure from TOML data."""
-        lattice = Lattice(np.array(data["lattice"]))
-        species = data["species"]
-        frac_coords = np.array(data["frac_coords"])
-        return Structure(lattice, species, frac_coords)
+    def atoms_from_toml(data: dict) -> PhonopyAtoms:
+        """Reconstructs a PhonopyAtoms object from TOML data."""
+        return PhonopyAtoms(
+            symbols=data["species"],
+            scaled_positions=np.array(data["frac_coords"]),
+            cell=np.array(data["lattice"]),
+        )
 
     def generate_supercells(
         self, reduce: bool = True, trim: bool = False
@@ -176,41 +206,16 @@ class SupercellGenerator:
         # TODO: recompute all q-points commensurate with a supercell, not just one
         q_comm = np.array([[q] for q in self.q_ibz])
         for i, T in enumerate(T_matrices):
-            ndsc_lattice = np.dot(T, self.primitive.lattice.matrix)
+            ndsc_lattice = np.dot(T, self.primitive.cell)
             ndsc_lattice = minkowski_reduce(ndsc_lattice)
             T = np.dot(
                 ndsc_lattice,
-                self.primitive.lattice.reciprocal_lattice.matrix.T / 2 / np.pi,
+                np.linalg.inv(self.primitive.cell),
             )
             T_matrices[i] = ensure_positive_det(np.rint(T).astype(int))
         self.sc_matrices = np.array(T_matrices)
         self.sc_sizes = np.array([np.linalg.det(T) for T in T_matrices])
         self.q_comm = q_comm
-
-
-def struct_to_phonopy(prim: Structure, grid: ArrayLike) -> Tuple[Supercell, Primitive]:
-    """
-    Convert a pymatgen Structure to Phonopy's Supercell and Primitive objects.
-
-    Parameters:
-    -----------
-    prim : pymatgen.Structure
-        The primitive structure.
-
-    grid : array-like
-        The supercell transformation matrix
-        TODO: define convention
-    """
-    atoms = PhonopyAtoms(
-        symbols=[s.species_string for s in prim],
-        masses=[s.species.elements[0].atomic_mass for s in prim],
-        scaled_positions=prim.frac_coords,
-        cell=prim.lattice.matrix,
-    )
-    grid = np.array(grid)
-    supercell = Supercell(atoms, np.diag(grid))
-    primitive = Primitive(supercell, np.diag(1 / grid))
-    return primitive, supercell
 
 
 def find_integers(nums, g23, g12, g31, g123):
@@ -290,28 +295,6 @@ def convert_to_fraction_array(arr):
             result[i, 1, j] = frac.denominator
 
     return result
-
-
-def get_ibz(
-    structure: Structure,
-    grid: ArrayLike,
-) -> np.ndarray:
-    """
-    Gets the q points in a structures IBZ. The output is sorted for consistency.
-
-    Parameters:
-    - structure: pymatgen.Structure
-        The input structure (primitive cell).
-    - grid: array-like
-        The grid of q points (e.g., [4, 4, 4] for a 4x4x4 grid).
-
-    Returns:
-    - qpoints: numpy.ndarray
-        The q points in the IBZ (fractional coordinates).
-    """
-    sga = SpacegroupAnalyzer(structure)
-    qpoints = np.array([q[0] for q in sga.get_ir_reciprocal_mesh(grid)])
-    return qpoints[np.lexsort(qpoints.T)]
 
 
 def get_T_matrices(qpoints: np.ndarray) -> np.ndarray:

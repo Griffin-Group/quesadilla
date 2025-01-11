@@ -6,7 +6,8 @@ quesadilla/FModules_QEv0/*
 examples/**/sc-*
 examples/**/quesadilla.yaml
 examples/**/quesadilla.toml
-examples/**/POSCAR_symm
+examples/**/POSCAR_standard_primitive
+tests/**/POSCAR_standard_primitive
 *.swp
 POSCAR_symm
 

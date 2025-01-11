@@ -1,6 +1,17 @@
 import os
+import warnings
+from pathlib import Path
+from typing import Optional
 
 import numpy as np
+import spglib
+from phonopy import Phonopy
+from phonopy.cui.collect_cell_info import collect_cell_info
+from phonopy.interface.calculator import (
+    write_crystal_structure,
+)
+from phonopy.structure.atoms import PhonopyAtoms, atom_data
+from phonopy.structure.cells import Primitive, get_primitive, guess_primitive_matrix
 from pymatgen.core.structure import Structure
 from pymatgen.io.vasp.inputs import Kpoints
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
@@ -121,19 +132,22 @@ def get_KPOINTS(struct, kspace):
 
 
 def generate_files(
-    prime_filename: str, grid: list, k_spacing: float = 0.15, verbose: bool = False
+    primitive_filename: str, grid: list, k_spacing: float = 0.15, verbose: bool = False
 ):
     """
     Generates the files for an NDSC phonon calculation.
     """
 
-    root = os.path.dirname(prime_filename)
-    structure = Structure.from_file(prime_filename)
-    sc_gen = SupercellGenerator(structure, grid)
+    root = os.path.dirname(primitive_filename)
+    primitive = get_atoms_from_file(primitive_filename)
+    sc_gen = SupercellGenerator(primitive, grid)
     sc_gen.generate_supercells()
 
+    # pymatgen structure object
+    new_prim_filename = os.path.join(root, "POSCAR_standard_primitive")
+    prim = Structure.from_file(new_prim_filename)
+
     T_matrices, sc_size, comm_q = sc_gen.sc_matrices, sc_gen.sc_sizes, sc_gen.q_comm
-    prim = sc_gen.primitive
     for i, (T, sz, q) in enumerate(zip(T_matrices, sc_size, comm_q)):
         # Print the supercell information
         if verbose:
@@ -161,3 +175,116 @@ def generate_files(
         with open(os.path.join(sc_path, "get_yaml.conf"), "w") as f:
             f.write(GET_YAML.format(T_str))
     sc_gen.to_toml(os.path.join(root, "quesadilla.toml"))
+
+
+def get_atoms_from_file(
+    cell_filename: Path,
+    calculator: str = "vasp",
+    symprec: float = 1e-5,
+    magmoms: Optional[np.ndarray] = None,
+):
+    # Get the cell info dict from the file
+    cell_info = _get_cell_info(cell_filename, calculator, magmoms)
+    # Find the standard primitive cell
+    primitive = _find_standard_primitive(cell_info, symprec)
+    # Write the standard primitive cell to a file
+    fname = f"{cell_filename}_standard_primitive"
+    write_crystal_structure(
+        fname,
+        primitive,
+        interface_mode=calculator,
+        optional_structure_info=cell_info["optional_structure_info"],
+    )
+    print(f"Standard primitive cell written to {fname}")
+
+    return primitive
+
+
+def _get_cell_info(
+    cell_filename: Path, calculator: str, magmoms: Optional[np.ndarray] = None
+):
+    """
+    Get the cell info from a file.
+
+    Args:
+        cell_filename (Path): The path to the cell file.
+        calculator (str): The calculator to use.
+        magmoms (np.ndarray): The magnetic moments.
+
+    Returns:
+        dict: The cell info dictionary.
+    """
+    # Get cell info
+    cell_info = collect_cell_info(
+        interface_mode=calculator,
+        cell_filename=cell_filename,
+        supercell_matrix=np.diag(np.ones(3, dtype=int)),
+    )
+    if "error_message" in cell_info:
+        print("Phonopy returned this error while reading the cell:")
+        print(cell_info["error_message"])
+        raise PhonopyError(f"Error reading the cell file {cell_filename}")
+    # Set magnetic moments
+    if magmoms is not None:
+        unitcell = cell_info["unitcell"]
+        try:
+            assert len(magmoms) in (len(unitcell), len(unitcell) * 3)
+            unitcell.magnetic_moments = magmoms
+        except AssertionError as e:
+            raise PhonopyError(
+                "Number of magnetic moments does not match the number of atoms or "
+                "number of atoms times 3."
+            ) from e
+
+    return cell_info
+
+
+def _find_standard_primitive(cell_info: dict, symprec: float) -> Primitive:
+    """
+    Finds the standard primitive cell of a structure. This should find a cell
+    similar to what you get from running `phonopy --symmetry`
+
+    Only supports non-magnetic systems. For magnetic systems it will just
+    return the input cell as is.
+
+    Args:
+        cell_info (dict): The cell info dictionary.
+        symprec (float): The symmetry precision.
+    """
+    phonon = Phonopy(
+        cell_info["unitcell"],
+        np.eye(3, dtype=int),
+        primitive_matrix=cell_info["primitive_matrix"],
+        symprec=symprec,
+        calculator=cell_info["interface_mode"],
+        log_level=0,
+    )
+
+    # Phonopy (and maybe spglib?) can't do this for magnetic systems
+    if phonon.unitcell.magnetic_moments is not None:
+        warnings.warn(
+            (
+                "Warning: phonopy cannot handle finding standard primitive cell for "
+                "magnetic systems yet. I will pretend your input structure is "
+                "in primitive in the right setting and proceed with the calculation. "
+                "If not, this _may_ cause issues with quesadilla's nondiagonal "
+                "supercell calculations. Proceed with caution."
+            )
+        )
+        return phonon.primitive
+
+    (bravais_lattice, bravais_pos, bravais_numbers) = spglib.refine_cell(
+        phonon.primitive.totuple(), symprec
+    )
+    bravais_symbols = [atom_data[n][1] for n in bravais_numbers]
+    bravais = PhonopyAtoms(
+        symbols=bravais_symbols, scaled_positions=bravais_pos, cell=bravais_lattice
+    )
+    # Find the primitive cell
+    trans_mat = guess_primitive_matrix(bravais, symprec=symprec)
+    return get_primitive(bravais, trans_mat, symprec=symprec)
+
+
+# Phonopy error class
+class PhonopyError(Exception):
+    pass
