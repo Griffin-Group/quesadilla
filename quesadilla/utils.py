@@ -16,7 +16,7 @@ from pymatgen.core.structure import Structure
 from pymatgen.io.vasp.inputs import Kpoints
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
-from quesadilla.supercells import SupercellGenerator, ensure_positive_det
+from quesadilla.supercells import SupercellGenerator, make_positive_det
 
 GET_YAML = """
 # Read force sets from text file
@@ -91,7 +91,7 @@ def read_lwm(path):
     for i in indices:
         supercell_file = os.path.join(path, f"supercell.{i}.dat")
         T = np.loadtxt(supercell_file, dtype=int)  # Read the 3x3 matrix
-        matrices.append(ensure_positive_det(T))
+        matrices.append(make_positive_det(T))
         # for qq in q:
         qq = q[i - 1]
         assert np.allclose(
@@ -139,7 +139,7 @@ def generate_files(
     """
 
     root = os.path.dirname(primitive_filename)
-    primitive = get_atoms_from_file(primitive_filename)
+    primitive = get_phonopy_prim(primitive_filename)
     sc_gen = SupercellGenerator(primitive, grid)
     sc_gen.generate_supercells()
 
@@ -177,7 +177,7 @@ def generate_files(
     sc_gen.to_toml(os.path.join(root, "quesadilla.toml"))
 
 
-def get_atoms_from_file(
+def get_phonopy_prim(
     cell_filename: Path,
     calculator: str = "vasp",
     symprec: float = 1e-5,

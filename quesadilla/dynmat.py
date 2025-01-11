@@ -65,7 +65,9 @@ class NondiagonalPhononCalculator:
             sc_gen: SupercellGenerator object
         """
         # TODO: move to CLI (maybe?)
-        n_sc = len([d for d in os.listdir(root) if d.startswith("sc-")])
+        n_sc = len(
+            [d for d in os.listdir(root) if d.startswith("sc-") and d[3:].isdigit()]
+        )
         assert n_sc == len(sc_gen.sc_matrices), "Number of supercells does not match"
         phonons = [
             phonopy.load(
@@ -93,11 +95,15 @@ class NondiagonalPhononCalculator:
         """
         dynmats = {}
         for i, p in enumerate(self.nd_phonons):
-            q = self.sc_gen.q_comm[i][0]
-            T = p.supercell_matrix
-            assert np.allclose(T.T @ q, (T.T @ q).astype(int)), "q is not commensurate?"
-            p.dynamical_matrix.run(q)
-            dynmats.setdefault(tuple(q), []).append(p.dynamical_matrix.dynamical_matrix)
+            for q in self.sc_gen.q_comm[i]:
+                T = p.supercell_matrix
+                assert np.allclose(
+                    T.T @ q, (T.T @ q).astype(int)
+                ), "q is not commensurate?"
+                p.dynamical_matrix.run(q)
+                dynmats.setdefault(tuple(q), []).append(
+                    p.dynamical_matrix.dynamical_matrix
+                )
 
         for q, dyn_mats in dynmats.items():
             print(f"Found {len(dyn_mats)} dynamical matrices at q = {np.round(q, 5)}")
