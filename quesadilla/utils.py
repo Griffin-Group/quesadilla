@@ -139,7 +139,7 @@ def generate_files(
     """
 
     root = os.path.dirname(primitive_filename)
-    primitive = get_atoms_from_file(primitive_filename)
+    primitive = get_phonopy_prim(primitive_filename)
     sc_gen = SupercellGenerator(primitive, grid)
     sc_gen.generate_supercells()
 
@@ -177,7 +177,7 @@ def generate_files(
     sc_gen.to_toml(os.path.join(root, "quesadilla.toml"))
 
 
-def get_atoms_from_file(
+def get_phonopy_prim(
     cell_filename: Path,
     calculator: str = "vasp",
     symprec: float = 1e-5,

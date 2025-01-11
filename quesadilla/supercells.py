@@ -20,7 +20,7 @@ class SupercellGenerator:
         q_ibz: np.ndarray = None,
         sc_matrices: np.ndarray = None,
         sc_sizes: np.ndarray = None,
-        q_comm: np.ndarray = None,
+        q_comm: list = None,
     ):
         # Setup primitive structure and supercell
         grid = np.array(grid)
@@ -44,7 +44,7 @@ class SupercellGenerator:
         # Setup supercell data
         self.sc_matrices = np.array(sc_matrices) if sc_matrices is not None else None
         self.sc_sizes = np.array(sc_sizes) if sc_sizes is not None else None
-        self.q_comm = np.array(q_comm) if q_comm is not None else None
+        self.q_comm = q_comm
 
     def get_ibz(
         self,
@@ -173,7 +173,7 @@ class SupercellGenerator:
             supercells = data["supercells"]
             T_matrices = np.array([sc["matrix"] for sc in supercells])
             sc_size = np.array([sc["size"] for sc in supercells])
-            comm_q = np.array([sc["commensurate_q"] for sc in supercells])
+            comm_q = [np.array(sc["commensurate_q"]) for sc in supercells]
         else:
             T_matrices = None
             sc_size = None
@@ -210,7 +210,11 @@ class SupercellGenerator:
 
         self.sc_sizes = np.array([np.linalg.det(T) for T in self.sc_matrices])
         # TODO: recompute all q-points commensurate with a supercell, not just one
-        self.q_comm = np.array([[q] for q in self.q_ibz])
+        # self.q_comm = np.array([[q] for q in self.q_ibz])
+        self.q_comm = [
+            np.array([q for q in self.q_ibz if np.allclose(np.rint(T @ q), T @ q)])
+            for T in self.sc_matrices
+        ]
 
     def _get_ndsc_matrices(self) -> np.ndarray:
         qpoints_frac = convert_to_fraction_array(self.q_ibz)

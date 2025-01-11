@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from quesadilla.supercells import SupercellGenerator
-from quesadilla.utils import get_atoms_from_file, read_lwm
+from quesadilla.utils import get_phonopy_prim, read_lwm
 
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -12,7 +12,7 @@ TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 @pytest.mark.parametrize(("material", "grid"), [("Si", [4, 4, 4]), ("CsCl", [4, 4, 4])])
 def test_phonon_band_comparison(material, grid):
     root = os.path.join(TEST_DIR, "data", material)
-    primitive = get_atoms_from_file(os.path.join(root, "POSCAR"))
+    primitive = get_phonopy_prim(os.path.join(root, "POSCAR"))
     sc_gen = SupercellGenerator(primitive, grid)
     sc_gen.generate_supercells()
 
@@ -24,5 +24,5 @@ def test_phonon_band_comparison(material, grid):
     q_comm = q_comm[sort_idx]
 
     for i, (T1, T2) in enumerate(zip(sc_matrices, sc_gen.sc_matrices)):
-        assert np.allclose(q_comm[i], sc_gen.q_comm[i])
+        assert q_comm[i][0] in sc_gen.q_comm[i]
         assert np.allclose(T1, T2)
