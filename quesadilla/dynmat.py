@@ -49,7 +49,7 @@ class NondiagonalPhononCalculator:
 
         ## Unfold the FCs to the full star of each q point
         full_fcq = {}
-        symmetrizer = symmetries.Symmetrizer(self.sc_gen._pmg_prim)
+        symmetrizer = symmetries.Symmetrizer(self.sc_gen.primitive)
         for q, D in irr_fcq.items():
             full_fcq |= symmetrizer.get_fcq_in_star(D, q, verbose=verbose)
 
