@@ -42,7 +42,8 @@ py.install_sources(['quesadilla/__init__.py',
                     'quesadilla/dynmat.py', 
                     'quesadilla/symmetries.py', 
                     'quesadilla/supercells.py',
-                    'quesadilla/utils.py'],
+                    'quesadilla/utils.py',
+                    'quesadilla/cli.py'],
                     subdir : 'quesadilla')
 
 # Install fortran module
