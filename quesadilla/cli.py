@@ -195,6 +195,19 @@ def get_parser():
         default=None,
         help="Create FORCE_SETS",
     )
+    parser.add_argument(
+        "--fz",
+        "--force-sets-zero",
+        nargs="+",
+        dest="create_force_sets_zero",
+        default=None,
+        help=(
+            "Create FORCE_SETS. disp.yaml in the current directory and "
+            "vapsrun.xml's for VASP or case.scf(m) for Wien2k as arguments "
+            "are required. The first argument is that of the perfect "
+            "supercell to subtract residual forces"
+        ),
+    )
     # -----------------------------
     # MODE 2.2: generate force constants
     # -----------------------------
@@ -297,8 +310,8 @@ def write_ndsc_with_displacement(
     """
     units = get_default_physical_units(calculator)
     for i, phonon in enumerate(nd_phonons):
-        os.makedirs(f"sc-{i+1}", exist_ok=True)
-        os.chdir(f"sc-{i+1}")
+        os.makedirs(f"sc-{i+1:03d}", exist_ok=True)
+        os.chdir(f"sc-{i+1:03d}")
         write_crystal_structure(
             get_default_cell_filename(calculator),
             phonon.primitive,
@@ -424,27 +437,60 @@ def get_phonopy_prim(
 
 
 def create_forcesets(
-    sc_gen: SupercellGenerator, settings: PhonopySettings, log_level: int
+    settings: PhonopySettings,
+    log_level: int,
+    forces_filename: str,
 ):
-    output_filename = settings.create_force_sets[0]
-    # cell_filename = get_default_cell_filename(settings.calculator)
-    for i, sc_matrix in enumerate(sc_gen.sc_matrices):
-        os.chdir(f"sc-{i+1}")
+    """
+    Create force sets from the displacements for each nondiagonal supercell.
 
-        with open("phonopy_disp.yaml", "r") as f:
-            data = yaml.safe_load(f)
-            num_disps = len(data["displacements"])
-            print(f"Found {num_disps} displacements for supercell {i+1}")
-        # Change filenames
-        settings.create_force_sets = [
-            os.path.join(f"disp-{i+1:03d}", output_filename) for i in range(num_disps)
-        ]
-        print(f"Changing filenames to {settings.create_force_sets}")
+    Args:
+        settings (PhonopySettings): Phonopy settings
+        log_level (int): Log level
+        forces_filename (str): The name of the file to read the forces from. This is the single argument of --force-sets or --force-sets-zero. Then for each supercell in the directory sc-i, the files to read forces from are disp-i/forces_filename.
+    """
+    sc_gen = SupercellGenerator.from_toml("quesadilla.toml")
+    for i in range(len(sc_gen.sc_matrices)):
+        os.chdir(f"sc-{i+1:03d}")
+        if log_level > 0:
+            print(f"Working on supercell {i+1} in directory sc-{i+1:03d}")
+        _set_filenames_for_forcesets(settings, log_level, forces_filename)
         _create_FORCE_SETS_from_settings(
-            settings, "phonopy_disp.yaml", settings.symmetry_tolerance, log_level
+            settings,
+            "phonopy_disp.yaml",
+            settings.symmetry_tolerance,
+            log_level,
         )
-        # phonopy -f disp-*/vasprun.xml
+        if log_level > 0:
+            print("------------------------------------")
         os.chdir("..")
+
+
+def _set_filenames_for_forcesets(
+    settings: PhonopySettings, log_level: int, forces_filename: str
+):
+    """
+    Sets the filenames for the forcesets. This is a helper function for create_forcesets. Sets settings.create_force_sets or settings.create_force_sets_zero to a list of files to read the forces from based on the `phonopy_disp.yaml` file.
+    """
+    with open("phonopy_disp.yaml", "r") as f:
+        data = yaml.safe_load(f)
+        num_disps = len(data["displacements"])
+        if log_level > 0:
+            print(f"Found {num_disps} displacements.")
+    # Change filenames
+    filenames = [
+        os.path.join(f"disp-{i+1:03d}", forces_filename) for i in range(num_disps)
+    ]
+
+    if settings.create_force_sets_zero:
+        filenames.insert(0, os.path.join("disp-000", forces_filename))
+        settings.create_force_sets_zero = filenames
+    else:
+        settings.create_force_sets = filenames
+
+    if log_level > 0:
+        print("Files to extract forces from:")
+        print(filenames)
 
 
 def _get_cell_info(
@@ -562,8 +608,12 @@ def main():
     # Ensure folders sc-* exist
 
     if settings.create_force_sets or settings.create_force_sets_zero:
-        sc_gen = SupercellGenerator.from_toml("quesadilla.toml")
-        create_forcesets(sc_gen, settings, log_level)
+        forces_filename = (
+            settings.create_force_sets[0]
+            if settings.create_force_sets
+            else settings.create_force_sets_zero[0]
+        )
+        create_forcesets(settings, log_level, forces_filename)
         sys.exit(0)
     #    TODO: implement this
     #    The issue is that we need to know the name of the file to read
