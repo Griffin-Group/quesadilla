@@ -11,9 +11,14 @@ from typing import Optional
 
 import numpy as np
 import spglib
+import yaml
 from phonopy import Phonopy
 from phonopy.cui.collect_cell_info import collect_cell_info
-from phonopy.cui.phonopy_script import _init_phonopy, _read_phonopy_settings
+from phonopy.cui.phonopy_script import (
+    _create_FORCE_SETS_from_settings,
+    _init_phonopy,
+    _read_phonopy_settings,
+)
 from phonopy.cui.settings import PhonopySettings
 from phonopy.interface.calculator import (
     add_arguments_of_calculators,
@@ -205,7 +210,6 @@ def get_parser():
             "vasprun.xml has to be passed as argument."
         ),
     )
-    # Force constant IO: REMOVED, users can run phonopy on generated yaml
     # Force constant symmetry
     # Should be hijaked and applied only to last step (ND D(q) -> DSC D(q))
     # Individual steps should not use symmetry
@@ -310,11 +314,11 @@ def write_ndsc_with_displacement(
             additional_info={"supercell_matrix": phonon.supercell_matrix},
         )
         # Write phonopy_disp.yaml
-        write_phonopy_disp_yaml(phonon, confs, units)
+        _write_phonopy_disp_yaml(phonon, confs, units)
         os.chdir("..")
 
 
-def write_phonopy_disp_yaml(phonon: Phonopy, confs: dict, units: dict):
+def _write_phonopy_disp_yaml(phonon: Phonopy, confs: dict, units: dict):
     """
     Write phonopy_disp.yaml file
 
@@ -331,19 +335,12 @@ def write_phonopy_disp_yaml(phonon: Phonopy, confs: dict, units: dict):
         "displacements": True,
     }
     confs["dim"] = " ".join(map(str, phonon.supercell_matrix.flatten().tolist()))
-    print(confs["dim"])
     phpy_yaml = PhonopyYaml(
         configuration=confs, physical_units=units, settings=yaml_settings
     )
     phpy_yaml.set_phonon_info(phonon)
     with open("phonopy_disp.yaml", "w") as w:
         w.write(str(phpy_yaml))
-
-
-# def create_forcesets():
-#    _create_FORCE_SETS_from_settings(
-#        settings, cell_filename, args.symprec, args.log_level
-#    )
 
 
 def initialize_quesadilla():
@@ -424,6 +421,30 @@ def get_phonopy_prim(
     cell_info = _get_cell_info(fname, calculator, magmoms)
 
     return primitive, cell_info
+
+
+def create_forcesets(
+    sc_gen: SupercellGenerator, settings: PhonopySettings, log_level: int
+):
+    output_filename = settings.create_force_sets[0]
+    # cell_filename = get_default_cell_filename(settings.calculator)
+    for i, sc_matrix in enumerate(sc_gen.sc_matrices):
+        os.chdir(f"sc-{i+1}")
+
+        with open("phonopy_disp.yaml", "r") as f:
+            data = yaml.safe_load(f)
+            num_disps = len(data["displacements"])
+            print(f"Found {num_disps} displacements for supercell {i+1}")
+        # Change filenames
+        settings.create_force_sets = [
+            os.path.join(f"disp-{i+1:03d}", output_filename) for i in range(num_disps)
+        ]
+        print(f"Changing filenames to {settings.create_force_sets}")
+        _create_FORCE_SETS_from_settings(
+            settings, "phonopy_disp.yaml", settings.symmetry_tolerance, log_level
+        )
+        # phonopy -f disp-*/vasprun.xml
+        os.chdir("..")
 
 
 def _get_cell_info(
@@ -537,11 +558,13 @@ def main():
 
     # MODE 2: post-process
     # Step 1: read quesadilla.toml
-    sc_gen = SupercellGenerator.from_toml("quesadilla.toml")
     # Step 2: Ensure all folders exist and have the correct files
     # Ensure folders sc-* exist
 
-    # if settings.create_force_sets or settings.create_force_sets_zero:
+    if settings.create_force_sets or settings.create_force_sets_zero:
+        sc_gen = SupercellGenerator.from_toml("quesadilla.toml")
+        create_forcesets(sc_gen, settings, log_level)
+        sys.exit(0)
     #    TODO: implement this
     #    The issue is that we need to know the name of the file to read
     #    the forces from! with phonopy you could do it easily for one cell
