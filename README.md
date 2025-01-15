@@ -1,4 +1,12 @@
 # Quesadilla
+[![Pre-Alpha](https://img.shields.io/badge/Status-Pre--Alpha-red)](https://oashour.github.io/quesadilla/develop/)
+[![GitHub Release](https://img.shields.io/github/v/release/oashour/quesadilla?include_prereleases)](https://github.com/oashour/quesadilla/releases)
+[![Tests](https://github.com/oashour/quesadilla/actions/workflows/run_tests.yaml/badge.svg)](https://github.com/oashour/quesadilla/actions)
+[![License](https://img.shields.io/badge/License-GPL-blue)](#license "Go to license section")
+[![Stable Docs](https://img.shields.io/badge/Docs-Stable-blue)](https://oashour.github.io/quesadilla/latest/)
+[![Develop Docs](https://img.shields.io/badge/Docs-Develop-purple)](https://oashour.github.io/quesadilla/develop/)
+
+
 Quesadilla (**Que**ue-**sa**ving non**di**agonal super**la**ttices) is a python package for nondiagonal supercell phonon calculations, using the approach of [Lloyd-Williams and Monserrat](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.92.184301)
 
 
