@@ -1,13 +1,13 @@
 site_name: "Quesadilla"
 site_url: "https://oashour.github.io/quesadilla/"
 repo_url: "https://github.com/oashour/quesadilla/"
-repo_name: "oashour/Python-Template"
+repo_name: "oashourquesadilla"
 copyright: Copyright &copy; 2024 Omar A. Ashour
 edit_uri: blob/main/docs/
 
 nav:
   - Home: index.md
-  - Examples: examples.md
+  - Examples: tutorial.md
   - Code Reference: reference/
 
 validation:
