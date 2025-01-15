@@ -29,6 +29,9 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Physics",
 ]
 
+[project.scripts]
+quesadilla = "quesadilla.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/oashour/quesadilla"
 Issues = "https://github.com/oashour/quesadilla/issues"
