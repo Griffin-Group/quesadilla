@@ -410,7 +410,7 @@ def initialize_quesadilla():
         args, argparse_control, log_level
     )
 
-    # These defaults are set internally inside multiple routines
+    # These defaults are set internally inside multiple phonopy routines
     # But I want to have them here from the get-go
     if settings.calculator is None:
         settings.calculator = "vasp"
@@ -673,6 +673,8 @@ def _get_nd_phonons(sc_gen, settings, log_level):
         nd_phonons.append(phonon)
         if log_level > 0:
             print("------------------------------------")
+        units = get_default_physical_units(settings.calculator)
+        _write_final_phonopy_yaml(phonon, {}, units)
         os.chdir("..")
 
     return nd_phonons
