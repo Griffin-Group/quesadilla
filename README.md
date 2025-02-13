@@ -9,26 +9,40 @@
 
 Quesadilla (**Que**ue-**sa**ving non**di**agonal super**la**ttices) is a python package for nondiagonal supercell phonon calculations, using the approach of [Lloyd-Williams and Monserrat](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.92.184301)
 
+## Features
+* A simple, phonopy-like interface for generating NDSCs and computing force constants.
+* Supports all force calculators supported by phonopy (VASP, QE, Wien2k, etc.).
+* Generates standard `phonopy.yaml` files that can be used with phonopy or any other package that reads phonopy output files.
+* Heavily uses symmetry to minimize the computational cost of the calculations.
+* Solves the set cover problem to extract the minimum number of NDSCs needed to cover the irreducible part of the $q$-grid.
 
+## Installation
 
-# Installation
-
-In principle, just running this (in a `venv`) should work, assuming a fortran compiler and `BLAS`/`LAPACK` implementation are available:
+Quesadilla requires a FORTRAN compiler and a BLAS/LAPACK installation on your path. It has only been tested on Linux and MacOS. The package is not yet listed on PyPI, so you need to install it directly from the GitHub repository via `pip`:
 ```bash
 pip install git+git@github.com:oashour/quesadilla.git
-```
+``` 
 
-This works fine on Perlmutter. On an Apple Silicon Mac, you may need to reinstall `phonopy` because it builds for the wrong architecture for some reason (I think a bug with their build system).
+If you have any issues with the installation, please open an issue.
+
+
+## Usage
+Quesadilla has a simple CLI that is nearly identical to phonopy. If you know how to use phonopy, you already know how to use Quesadilla! See the full [tutorial](https://oashour.github.io/quesadilla/latest/tutorial.html) for more details.
+
+To generate the NDSCs, you can run
 
 ```bash
-CMAKE_ARGS="-DCMAKE_OSX_ARCHITECTURES=arm64" pip install --upgrade --verbose --force-reinstall --no-cache-dir phonopy
+quesadilla -d --dim 4 4 4
 ```
-
-If you want to install the package in editable mode, it's slightly different from the usual approach because of the fortran extension.
+which will find the smallest number of NDSCs that cover the irreducible part of a 4x4x4 $q$-grid. You can then use your favorite force calculator to compute the forces in these supercells, and then run
 
 ```bash
-python -m pip install --no-build-isolation --editable . 
+quesadilla -f vasprun.xml
+```
+to create the `FORCE_SETS` file for each NDSC. Finally, you can compute the force constants in the full 4x4x4 supercell by running
+
+```bash
+quesadilla --fc
 ```
 
-# Usage
-Currently the CLI does not exist, but the package is fully usable via the python API (which needs quite a bit of work, especially to support IO for all the codes phonopy supports besides VASP). See the `examples` directory for a Silicon example on a 4x4x4 $q$-grid. You only need to read the Jupyter notebook and follow the instructions.
+which will produce a `phonopy.yaml` file that can be used with phonopy or any other package that reads phonopy output files.

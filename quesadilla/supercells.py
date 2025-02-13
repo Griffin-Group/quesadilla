@@ -12,6 +12,7 @@ from phonopy.structure.atoms import PhonopyAtoms
 from phonopy.structure.cells import Primitive, Supercell
 
 
+
 class SupercellGenerator:
     def __init__(
         self,
@@ -218,13 +219,13 @@ class SupercellGenerator:
             print(
                 f"We have {len(self.sc_matrices)} q-points in IBZ necessitating "
                 f"{len(self.sc_matrices)} supercells with total size "
-                f"{np.sum(self.sc_sizes)}"
+                f"{int(np.sum(self.sc_sizes)):3d}"
             )
             self._pick_smallest_supercells()
             print(
-                f"After minimization, we only need"
+                f"After minimization, we only need "
                 f"{len(self.sc_matrices)} supercells with total size "
-                f"{np.sum(self.sc_sizes)}"
+                f"{int(np.sum(self.sc_sizes)):3d}"
             )
 
     def _get_ndsc_matrices(self) -> np.ndarray:

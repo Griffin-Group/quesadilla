@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# You can run this in an interactive session on a cluster
+
 export OMP_NUM_THREADS=1
 export OMP_PLACES=threads
 export OMP_PROC_BIND=spread
