@@ -1,14 +1,9 @@
 phonopy:
-  version: "2.34.0"
+  version: "2.33.3"
+  calculator: vasp
   frequency_unit_conversion_factor: 15.633302
   symmetry_tolerance: 1.00000e-05
   configuration:
-    force_sets: "READ"
-    force_constants: "WRITE"
-    fc_format: "HDF5"
-    fc_symmetry: ".FALSE."
-    include_fc: ".TRUE."
-    primitive_axes: "1 0 0 0 1 0 0 0 1"
     dim: "1 1 0 1 -1 1 0 0 -2"
 
 physical_unit:
@@ -21,11 +16,6 @@ space_group:
   type: "Pm-3m"
   number: 221
   Hall_symbol: "-P 4 2 3"
-
-primitive_matrix:
-- [  1.000000000000000,  0.000000000000000,  0.000000000000000 ]
-- [  0.000000000000000,  1.000000000000000,  0.000000000000000 ]
-- [  0.000000000000000,  0.000000000000000,  1.000000000000000 ]
 
 supercell_matrix:
 - [   1,   1,   0 ]
