@@ -28,3 +28,36 @@ pip install git+git@github.com:oashour/quesadilla.git
 ``` 
 
 If you have any issues with the installation, please open an issue.
+
+On an Apple Silicon Mac, you may need to reinstall `phonopy` because it sometimes builds for the wrong architecture for some reason (not sure why...?).
+```bash
+CMAKE_ARGS="-DCMAKE_OSX_ARCHITECTURES=arm64" pip install --upgrade --verbose --force-reinstall --no-cache-dir phonopy
+```
+
+If you want to install the package in editable mode, it's slightly different from the usual approach because of the fortran extension.
+
+```bash
+pip install numpy meson meson-python
+python -m pip install --no-build-isolation --editable . 
+```
+
+## Usage
+Quesadilla has a simple CLI that is nearly identical to phonopy. If you know how to use phonopy, you already know how to use Quesadilla! See the full [tutorial](https://oashour.github.io/quesadilla/latest/tutorial.html) for more details.
+
+To generate the NDSCs, you can run
+
+```bash
+quesadilla -d --dim 4 4 4
+```
+which will find the smallest number of NDSCs that cover the irreducible part of a 4x4x4 $q$-grid. You can then use your favorite force calculator to compute the forces in these supercells, and then run
+
+```bash
+quesadilla -f vasprun.xml
+```
+to create the `FORCE_SETS` file for each NDSC. Finally, you can compute the force constants in the full 4x4x4 supercell by running
+
+```bash
+quesadilla --fc
+```
+
+which will produce a `phonopy.yaml` file that can be used with phonopy or any other package that reads phonopy output files.
