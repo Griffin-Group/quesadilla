@@ -10,7 +10,7 @@ TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 @pytest.mark.parametrize(("material", "grid"), [("Si", [4, 4, 4]), ("CsCl", [4, 4, 4])])
-def test_phonon_band_comparison(material, grid):
+def test_supercells(material, grid):
     root = os.path.join(TEST_DIR, "data", material)
     primitive, _ = get_phonopy_prim(os.path.join(root, "POSCAR"))
     sc_gen = SupercellGenerator(primitive, grid)

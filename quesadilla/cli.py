@@ -445,7 +445,10 @@ def get_phonopy_prim(
     # Find the standard primitive cell
     primitive = _find_standard_primitive(cell_info, symprec)
     # Write the standard primitive cell to a file
-    fname = f"P{cell_filename}"
+    # Get dir name and filename and write the standard primitive cell to file {dir}/P{filename}
+    fname = os.path.join(
+        os.path.dirname(cell_filename), f"P{os.path.basename(cell_filename)}"
+    )
     write_crystal_structure(
         fname,
         primitive,
@@ -619,6 +622,8 @@ def get_sc_gen(settings, cell_filename):
     sc_gen.generate_supercells(minimize_supercells=True)
     sc_gen.to_toml("quesadilla.toml")
     return cell_info, sc_gen
+
+
 def create_force_constants(settings: Phonopy, confs: dict, log_level: int):
     """
     Create force constants from the force sets for each nondiagonal supercell.
@@ -709,5 +714,3 @@ def main():
     if settings.create_force_constants:
         create_force_constants(settings, confs, log_level)
         sys.exit(0)
-
-
