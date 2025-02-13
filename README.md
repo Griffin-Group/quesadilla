@@ -1,10 +1,10 @@
 # Quesadilla
-[![Pre-Alpha](https://img.shields.io/badge/Status-Pre--Alpha-red)](https://oashour.github.io/quesadilla/develop/)
-[![GitHub Release](https://img.shields.io/github/v/release/oashour/quesadilla?include_prereleases)](https://github.com/oashour/quesadilla/releases)
-[![Tests](https://github.com/oashour/quesadilla/actions/workflows/run_tests.yaml/badge.svg)](https://github.com/oashour/quesadilla/actions)
+[![Pre-Alpha](https://img.shields.io/badge/Status-Pre--Alpha-red)](https://Griffin-Group.github.io/quesadilla/develop/)
+[![GitHub Release](https://img.shields.io/github/v/release/Griffin-Group/quesadilla?include_prereleases)](https://github.com/Griffin-Group/quesadilla/releases)
+[![Tests](https://github.com/Griffin-Group/quesadilla/actions/workflows/run_tests.yaml/badge.svg)](https://github.com/Griffin-Group/quesadilla/actions)
 [![License](https://img.shields.io/badge/License-GPL-blue)](#license "Go to license section")
-[![Stable Docs](https://img.shields.io/badge/Docs-Stable-blue)](https://oashour.github.io/quesadilla/latest/)
-[![Develop Docs](https://img.shields.io/badge/Docs-Develop-purple)](https://oashour.github.io/quesadilla/develop/)
+[![Stable Docs](https://img.shields.io/badge/Docs-Stable-blue)](https://Griffin-Group.github.io/quesadilla/latest/)
+[![Develop Docs](https://img.shields.io/badge/Docs-Develop-purple)](https://Griffin-Group.github.io/quesadilla/develop/)
 
 
 Quesadilla (**Que**ue-**sa**ving non**di**agonal super**la**ttices) is a python package for nondiagonal supercell phonon calculations, using the approach of [Lloyd-Williams and Monserrat](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.92.184301)
@@ -20,14 +20,14 @@ Quesadilla (**Que**ue-**sa**ving non**di**agonal super**la**ttices) is a python 
 
 Quesadilla requires a FORTRAN compiler and a BLAS/LAPACK installation on your path. It has only been tested on Linux and MacOS. The package is not yet listed on PyPI, so you need to install it directly from the GitHub repository via `pip`:
 ```bash
-pip install git+git@github.com:oashour/quesadilla.git
+pip install git+git@github.com:Griffin-Group/quesadilla.git
 ``` 
 
 If you have any issues with the installation, please open an issue.
 
 
 ## Usage
-Quesadilla has a simple CLI that is nearly identical to phonopy. If you know how to use phonopy, you already know how to use Quesadilla! See the full [tutorial](https://oashour.github.io/quesadilla/latest/tutorial.html) for more details.
+Quesadilla has a simple CLI that is nearly identical to phonopy. If you know how to use phonopy, you already know how to use Quesadilla! See the full [tutorial](https://Griffin-Group.github.io/quesadilla/latest/tutorial.html) for more details.
 
 To generate the NDSCs, you can run
 

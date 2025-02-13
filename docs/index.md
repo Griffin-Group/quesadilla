@@ -24,7 +24,7 @@ Under the hood, quesadilla uses `spglib` to handle much of the symmetry analysis
 ## Installation
 Quesadilla requires a FORTRAN compiler and a BLAS/LAPACK installation on your path. It has only been tested on Linux and MacOS. The package is not yet listed on PyPI, so you need to install it directly from the GitHub repository via `pip`:
 ```bash
-pip install git+git@github.com:oashour/quesadilla.git
+pip install git+git@github.com:Griffin-Group/quesadilla.git
 ``` 
 
 If you have any issues with the installation, please open an issue.
@@ -42,7 +42,7 @@ python -m pip install --no-build-isolation --editable .
 ```
 
 ## Usage
-Quesadilla has a simple CLI that is nearly identical to phonopy. If you know how to use phonopy, you already know how to use Quesadilla! See the full [tutorial](https://oashour.github.io/quesadilla/latest/tutorial.html) for more details.
+Quesadilla has a simple CLI that is nearly identical to phonopy. If you know how to use phonopy, you already know how to use Quesadilla! See the full [tutorial](https://Griffin-Group.github.io/quesadilla/latest/tutorial.html) for more details.
 
 To generate the NDSCs, you can run
 

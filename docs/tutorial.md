@@ -27,7 +27,7 @@ Nondiagonal supercell 3 needs 2 displacements.
 Nondiagonal supercell 4 needs 4 displacements.
 Nondiagonal supercell 5 needs 2 displacements.
 ```
-You can ignore the point group warnings, see [this issue](https://github.com/oashour/quesadilla/issues/19)
+You can ignore the point group warnings, see [this issue](https://github.com/Griffin-Group/quesadilla/issues/19)
 
 The directory structure after running this command should automatically look like this:
 
@@ -92,7 +92,7 @@ As usual with `phonopy`, we now have to run the DFT calculations on the supercel
 
     With diagonal supercells, it's easy to choose the $k$-points for each DFT calculation in the supercell. For example, if your primitive cell was converged with an $8 \times 8 \times 8$ $k$-grid, then a $4 \times 4 \times 4$ supercell would have the same $k$-point density with a $2 \times 2 \times 2$ grid instead.
 
-    The situation is a little trickier with NDSCs and the $k$-grid used for each NDSC will be different. The easiest option is to use an external tool to generate necessary grid that maintains the desired $k$-point spacing. The script `example/generate_kpoints.py` shows how to do this with `pymatgen`. 
+    The situation is a little trickier with NDSCs and the $k$-grid used for each NDSC will be different. The easiest option is to use an external tool to generate necessary grid that maintains the desired $k$-point spacing. The script [`example/generate_kpoints.py`](https://github.com/Griffin-Group/quesadilla/blob/main/example/generate_kpoints.py) shows how to do this with `pymatgen`. 
 
     Also note that, given the lower symmetry and weird shape of NDSCs, you will sometimes see this warning in VASP:
 
