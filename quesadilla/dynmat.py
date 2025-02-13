@@ -71,7 +71,7 @@ class NondiagonalPhononCalculator:
         assert n_sc == len(sc_gen.sc_matrices), "Number of supercells does not match"
         phonons = [
             phonopy.load(
-                os.path.join(root, f"sc-{i+1}", "phonopy.yaml"),
+                os.path.join(root, f"sc-{i+1:03d}", "phonopy.yaml"),
                 is_symmetry=False,
                 symmetrize_fc=False,
             )
