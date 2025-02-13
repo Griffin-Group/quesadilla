@@ -7,7 +7,7 @@ edit_uri: blob/main/docs/
 
 nav:
   - Home: index.md
-  - Examples: tutorial.md
+  - Tutorial: tutorial.md
   - Code Reference: reference/
 
 validation:
@@ -77,6 +77,9 @@ extra_css:
 - https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.7/katex.min.css
 
 markdown_extensions:
+- admonition
+- pymdownx.details
+- pymdownx.superfences
 - pymdownx.highlight:
     use_pygments: true
     pygments_lang_class: true
