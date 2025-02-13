@@ -445,7 +445,7 @@ def get_phonopy_prim(
     # Find the standard primitive cell
     primitive = _find_standard_primitive(cell_info, symprec)
     # Write the standard primitive cell to a file
-    fname = f"{cell_filename}_standard_primitive"
+    fname = f"P{cell_filename}"
     write_crystal_structure(
         fname,
         primitive,
