@@ -27,7 +27,7 @@ If you have any issues with the installation, please open an issue.
 
 
 ## Usage
-Quesadilla has a simple CLI that is nearly identical to phonopy. If you know how to use phonopy, you already know how to use Quesadilla! See the full [tutorial](https://Griffin-Group.github.io/quesadilla/latest/tutorial.html) for more details.
+Quesadilla has a simple CLI that is nearly identical to phonopy. If you know how to use phonopy, you already know how to use Quesadilla! See the full [tutorial](https://Griffin-Group.github.io/quesadilla/latest/tutorial) for more details.
 
 To generate the NDSCs, you can run
 
