@@ -18,10 +18,19 @@ Quesadilla (**Que**ue-**sa**ving non**di**agonal super**la**ttices) is a python 
 
 ## Installation
 
-Quesadilla requires a FORTRAN compiler and a BLAS/LAPACK installation on your path. It has only been tested on Linux and MacOS. The package is not yet listed on PyPI, so you need to install it directly from the GitHub repository via `pip`:
+Quesadilla requires a FORTRAN compiler and a BLAS/LAPACK installation on your path. It has only been tested on Linux and MacOS. The package is not yet listed on PyPI, so you need to install it directly from the GitHub repository via `pip`. Different versions of pip may support different syntax, but the following seems to work somewhat consistently.
+
+
 ```bash
-pip install git+git@github.com:Griffin-Group/quesadilla.git
-``` 
+pip install git+https://github.com/Griffin-Group/quesadilla.git
+```
+
+Worst case scenario, you can clone the repo and install with pip
+
+```bash
+git clone git+https://github.com/Griffin-Group/quesadilla.git
+cd quesadilla && pip install .
+```
 
 If you have any issues with the installation, please open an issue.
 
