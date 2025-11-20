@@ -8,10 +8,10 @@ version = "0.0.3"
 authors = [{ name = "Omar A. Ashour", email = "ashour@berkeley.edu" }]
 description = ""
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
     "numpy",
-    "phonopy",
+    "phonopy<=2.34.0",
     "pymatgen",
     "pulp",
     "tomli",

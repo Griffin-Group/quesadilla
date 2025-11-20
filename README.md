@@ -28,7 +28,7 @@ pip install git+https://github.com/Griffin-Group/quesadilla.git
 Worst case scenario, you can clone the repo and install with pip
 
 ```bash
-git clone git+https://github.com/Griffin-Group/quesadilla.git
+git clone https://github.com/Griffin-Group/quesadilla.git
 cd quesadilla && pip install .
 ```
 
