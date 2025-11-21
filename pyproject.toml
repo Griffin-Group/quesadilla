@@ -11,7 +11,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "numpy",
-    "phonopy<=2.34.0",
+    "phonopy==2.34.0",
     "pymatgen",
     "pulp",
     "tomli",
