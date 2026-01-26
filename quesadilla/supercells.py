@@ -168,7 +168,7 @@ class SupercellGenerator:
         primitive = cls.atoms_from_toml(data["primitive"])
         bz = data["brillouin_zone"]
         grid = bz["grid"]
-        irr_q = np.array(bz["irreducible_q"])
+        irr_q2 = np.array(bz["irreducible_q"])
 
         if "supercells" in data:
             supercells = data["supercells"]
@@ -330,6 +330,7 @@ def find_integers(nums, g23, g12, g31, g123):
     # Compute r
     gg_r = int(g31 * g23 / g123)
     z = g23 * nums[0] / g12 + g31 * q * nums[1] / g12
+    r = np.nan
     if gg_r == 1:
         r = 0
     else:
@@ -337,6 +338,17 @@ def find_integers(nums, g23, g12, g31, g123):
             if (z + i * nums[2]) % gg_r == 0:
                 r = i
                 break
+        if np.isnan(r):
+            r = 0
+    # TODO: should double check that this edge case
+    # above is handled correctly. When m1 = nums[0] = 0 and also
+    # q = 0, we end up with z = 0, and that can happen even
+    # if gg_r != 1. In such a case, I think r = 0 should be the
+    # solution, the paper never says "r = 0 iff gg_r = 1", only
+    # that we must have r < gg_r. But need a careful math check.
+    # Example of this edge case: q = (0, 1/n, 1/n).
+    # Such q-points show up in, e.g., low symmetry lattices (monoclinic)
+    # where they are not equivalent to q = (1/n, 1/n, 0) for example.
     return p, q, r
 
 
